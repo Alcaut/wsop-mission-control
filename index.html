@@ -1312,25 +1312,37 @@ async function ss(k, v) {
     localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v));
   } catch (e) {}
 }
-async function ssOnline(url, k, v) {
-  if (!url) return;
+
+// ── ONLINE SYNC (Google Apps Script) ──────────────────────────────────────────
+// URL hardcodeada — todos los usuarios quedan conectados automáticamente.
+const API_URL = 'https://script.google.com/macros/s/AKfycbzu-lLbvZNDjhUdA2cFxZOrdWZwML612XwMsFfgVEpmL-GRNOdTHMZfg5goqTVOhPVX/exec';
+
+// POST sin preflight CORS: text/plain evita el OPTIONS que Apps Script no maneja.
+async function ssOnline(k, v) {
+  if (!API_URL) return false;
   try {
-    await fetch(url, {
+    await fetch(API_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'text/plain;charset=utf-8'
       },
       body: JSON.stringify({
         key: k,
         value: typeof v === 'string' ? v : JSON.stringify(v)
-      })
+      }),
+      redirect: 'follow'
     });
-  } catch (e) {}
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
-async function sgOnline(url, k) {
-  if (!url) return null;
+async function sgOnline(k) {
+  if (!API_URL) return null;
   try {
-    const r = await fetch(url + '?key=' + encodeURIComponent(k));
+    const r = await fetch(API_URL + '?key=' + encodeURIComponent(k), {
+      redirect: 'follow'
+    });
     if (r.ok) {
       const t = await r.text();
       return t || null;
@@ -1428,7 +1440,8 @@ function App() {
   const [regs, setRegs] = useState({});
   const [dayNotes, setDayNotes] = useState({}); // notas del día por fecha
   const [ytUrls, setYtUrls] = useState({}); // URL player YT por fecha
-  const [apiUrl, setApiUrl] = useState(''); // Google Apps Script URL (online)
+  const [online, setOnline] = useState(!!API_URL); // conectado a Apps Script
+  const [syncing, setSyncing] = useState(false); // mostrando indicador de sync
   const [rundown, setRundown] = useState({}); // rundown por fecha mc4_rundown_DATE
   const [promoSt, setPromoSt] = useState({}); // estado cola promos por fecha mc4_promos_DATE
   const [promoCfg, setPromoCfg] = useState(null);
@@ -1473,9 +1486,6 @@ function App() {
       if (v) try {
         setYtUrls(JSON.parse(v));
       } catch (e) {}
-    });
-    sg('mc4_apiUrl').then(v => {
-      if (v) setApiUrl(v);
     });
     sg('mc4_rundown').then(v => {
       if (v) try {
@@ -1557,6 +1567,99 @@ function App() {
       setPhase(v || 'pre');
     });
   }, [sel]);
+
+  // ── ONLINE SYNC ────────────────────────────────────────────────────────────
+  // Trae notas + editorial + data mesa del día seleccionado desde Apps Script,
+  // y hace polling cada 15s para que todos los usuarios vean lo mismo.
+  const pulling = useRef(false);
+  const lastNoteEdit = useRef(0);
+  async function pullDay(date) {
+    if (!API_URL || !date || date === 'TEST' || pulling.current) return;
+    pulling.current = true;
+    try {
+      const [note, edi, data] = await Promise.all([sgOnline('note_' + date), sgOnline('edi_' + date), sgOnline('data_' + date)]);
+      // No pisar notas si el usuario tipeó hace menos de 8s
+      if (note != null && Date.now() - lastNoteEdit.current > 8000) {
+        setDayNotes(p => {
+          if ((p[date] || '') === note) return p;
+          const u = {
+            ...p,
+            [date]: note
+          };
+          ss('mc4_notes', u);
+          return u;
+        });
+      }
+      if (edi != null) {
+        try {
+          const eObj = JSON.parse(edi);
+          setRundown(p => {
+            const cur = p[date] || {};
+            if ((cur.editorial || '') === (eObj.editorial || '')) return p;
+            const u = {
+              ...p,
+              [date]: {
+                ...cur,
+                editorial: eObj.editorial
+              }
+            };
+            ss('mc4_rundown', u);
+            return u;
+          });
+        } catch (e) {}
+      }
+      if (data != null) {
+        try {
+          const dObj = JSON.parse(data);
+          setRundown(p => {
+            const cur = p[date] || {};
+            const same = ['pagosText', 'chipsText', 'mesaText', 'dataNotes'].every(k => (cur[k] || '') === (dObj[k] || ''));
+            if (same) return p;
+            const u = {
+              ...p,
+              [date]: {
+                ...cur,
+                ...dObj
+              }
+            };
+            ss('mc4_rundown', u);
+            return u;
+          });
+        } catch (e) {}
+      }
+      setOnline(true);
+    } catch (e) {
+      setOnline(false);
+    }
+    pulling.current = false;
+  }
+
+  // Pull al cambiar de día
+  useEffect(() => {
+    if (API_URL && sel && sel !== 'TEST') pullDay(sel);
+  }, [sel]);
+
+  // Polling cada 15s del día activo
+  useEffect(() => {
+    if (!API_URL) return;
+    const id = setInterval(() => {
+      if (sel && sel !== 'TEST') pullDay(sel);
+    }, 15000);
+    return () => clearInterval(id);
+  }, [sel]);
+
+  // Push con debounce (espera 800ms tras la última tecla antes de enviar)
+  const pushTimers = useRef({});
+  function pushOnline(key, value) {
+    if (!API_URL) return;
+    if (pushTimers.current[key]) clearTimeout(pushTimers.current[key]);
+    setSyncing(true);
+    pushTimers.current[key] = setTimeout(async () => {
+      const ok = await ssOnline(key, value);
+      setOnline(ok);
+      setSyncing(false);
+    }, 800);
+  }
   useEffect(() => {
     if (sel && PORTAL_NAMES[sel]) {
       setPortals(p => {
@@ -2412,15 +2515,16 @@ function App() {
     },
     dayNote: dayNotes[sel] || '',
     onDayNote: v => {
+      lastNoteEdit.current = Date.now();
       setDayNotes(p => {
         const u = {
           ...p,
           [sel]: v
         };
         ss('mc4_notes', u);
-        ssOnline(apiUrl, 'mc4_notes', u);
         return u;
       });
+      pushOnline('note_' + sel, v);
     },
     ytUrl: ytUrls[sel] || '',
     onYtUrl: v => {
@@ -2433,11 +2537,8 @@ function App() {
         return u;
       });
     },
-    apiUrl: apiUrl,
-    onApiUrl: v => {
-      setApiUrl(v);
-      ss('mc4_apiUrl', v);
-    },
+    online: online,
+    syncing: syncing,
     promoSt: promoSt[sel] || null,
     onPromoSt: v => {
       setPromoSt(p => {
@@ -2495,6 +2596,7 @@ function App() {
     sel: sel,
     day: day,
     data: rundown[sel] || null,
+    online: online,
     onSave: v => {
       setRundown(p => {
         const u = {
@@ -2504,6 +2606,16 @@ function App() {
         ss('mc4_rundown', u);
         return u;
       });
+      // Push editorial y data mesa por separado para sincronizar online
+      pushOnline('edi_' + sel, JSON.stringify({
+        editorial: v.editorial || ''
+      }));
+      pushOnline('data_' + sel, JSON.stringify({
+        pagosText: v.pagosText || '',
+        chipsText: v.chipsText || '',
+        mesaText: v.mesaText || '',
+        dataNotes: v.dataNotes || ''
+      }));
     }
   }), tab === 'info' && /*#__PURE__*/React.createElement(TmplView, {
     copyText: copyText,
@@ -2993,15 +3105,42 @@ function RundownView({
   sel,
   day,
   data,
-  onSave
+  onSave,
+  online
 }) {
   const [rd, setRd] = React.useState(data || defaultRundown());
-  const [rsec, setRsec] = React.useState('intro');
+  const [rsec, setRsec] = React.useState('evento');
   const saveTimer = React.useRef(null);
+  const lastEdit = React.useRef(0);
+
+  // Cambio de día → siempre recarga
   React.useEffect(() => {
     setRd(data || defaultRundown());
+    lastEdit.current = 0;
   }, [sel]);
+
+  // Datos nuevos desde polling → solo aplicar si no hubo edición reciente (8s)
+  React.useEffect(() => {
+    if (!data) return;
+    if (Date.now() - lastEdit.current < 8000) return; // usuario editando, no pisar
+    setRd(prev => {
+      // merge: campos de texto entrantes que difieran
+      const fields = ['editorial', 'pagosText', 'chipsText', 'mesaText', 'dataNotes'];
+      let changed = false;
+      const u = {
+        ...prev
+      };
+      fields.forEach(f => {
+        if (data[f] != null && data[f] !== prev[f]) {
+          u[f] = data[f];
+          changed = true;
+        }
+      });
+      return changed ? u : prev;
+    });
+  }, [data]);
   function schedSave(d) {
+    lastEdit.current = Date.now();
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       const u = {
@@ -5506,8 +5645,8 @@ function EmView({
   onDayNote,
   ytUrl,
   onYtUrl,
-  apiUrl,
-  onApiUrl,
+  online,
+  syncing,
   promoSt,
   onPromoSt,
   promoCfg,
@@ -6072,31 +6211,38 @@ function EmView({
     style: {
       padding: '8px 10px',
       background: D.sur,
-      border: '1px solid ' + D.brd,
-      borderRadius: '8px'
+      border: '1px solid ' + (online ? D.green + '44' : D.brd),
+      borderRadius: '8px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '13px'
+    }
+  }, online ? '🌐' : '🔌'), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: '10px',
-      color: apiUrl ? D.green : D.txt3,
-      marginBottom: '4px',
+      fontSize: '11px',
+      color: online ? D.green : D.txt3,
       fontWeight: 500
     }
-  }, apiUrl ? '🌐 Online · Apps Script conectado' : '🔌 Modo local · sin conexión online'), /*#__PURE__*/React.createElement("input", {
-    value: apiUrl || '',
-    onChange: e => onApiUrl(e.target.value),
-    placeholder: "Pegar URL del Apps Script de Google aqu\xED...",
+  }, online ? 'Online · datos compartidos' : 'Sin conexión'), /*#__PURE__*/React.createElement("div", {
     style: {
-      width: '100%',
-      fontSize: '11px',
-      padding: '5px 8px',
-      background: D.bg,
-      border: '1px solid ' + (apiUrl ? D.green : D.brd),
-      borderRadius: '5px',
-      color: D.txt,
-      fontFamily: D.sans
+      fontSize: '9px',
+      color: D.txt3
     }
-  })), /*#__PURE__*/React.createElement("button", {
+  }, syncing ? 'Sincronizando…' : 'Notas, Editorial y Data Mesa se comparten con el equipo')), syncing && /*#__PURE__*/React.createElement("span", {
+    className: "pulse",
+    style: {
+      color: D.amber,
+      fontSize: '11px'
+    }
+  }, "\u25CF")), /*#__PURE__*/React.createElement("button", {
     className: "btn-ghost",
     style: {
       width: '100%',
@@ -6230,7 +6376,7 @@ function EmView({
       letterSpacing: '.08em',
       fontWeight: 700
     }
-  }, "\uD83D\uDCDD Notas del d\xEDa"), apiUrl && /*#__PURE__*/React.createElement("span", {
+  }, "\uD83D\uDCDD Notas del d\xEDa"), online && /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: '9px',
       padding: '1px 6px',
@@ -6268,7 +6414,7 @@ function EmView({
       color: D.txt3,
       marginTop: '5px'
     }
-  }, apiUrl ? '✓ Se comparte con todos los usuarios en tiempo real' : '⚠ Solo local — configurá el Apps Script URL para compartir con el equipo')), /*#__PURE__*/React.createElement("div", {
+  }, online ? '✓ Se comparte con todos los usuarios en tiempo real' : '⚠ Sin conexión — se guarda solo en este dispositivo')), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: '11px',
       color: D.txt3,
