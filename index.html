@@ -1322,7 +1322,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbzu-lLbvZNDjhUdA2cFxZOr
 async function pushDayOnline(date, stateObj, role) {
   if (!API_URL || !date || date === 'TEST') return false;
   try {
-    await fetch(API_URL, {
+    const r = await fetch(API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'text/plain;charset=utf-8'
@@ -1334,7 +1334,14 @@ async function pushDayOnline(date, stateObj, role) {
       }),
       redirect: 'follow'
     });
-    return true;
+    // Intentar confirmar persistencia. Si el body no se puede leer por CORS
+    // pero el POST salió sin error, lo damos por enviado (el dato llegó a Google).
+    try {
+      const j = await r.json();
+      return j && j.ok === false ? false : true;
+    } catch (_) {
+      return true;
+    }
   } catch (e) {
     return false;
   }
@@ -1690,7 +1697,7 @@ function App() {
   function buildDaySnapshot(date) {
     return {
       phase: phase || 'pre',
-      tasks: tasks || {},
+      tasks: tasks[date] || {},
       regs: regs[date] || [],
       dayNote: dayNotes[date] || '',
       ytUrl: ytUrls[date] || '',
@@ -1710,17 +1717,24 @@ function App() {
       ss('mc4_phase_' + date, snap.phase);
       return snap.phase;
     });
-    // Tareas — merge: incoming wins para tasks que el usuario no tocó en 8s
-    if (snap.tasks) setTasks(p => {
+    // Tareas — aplicar bajo [date], respetando lo que tocaste en los últimos 8s
+    if (snap.tasks && !(lastEdits.current.tasks > now8)) setTasks(p => {
+      const cur = p[date] || {};
+      const merged = {
+        ...cur,
+        ...snap.tasks
+      };
+      if (JSON.stringify(merged) === JSON.stringify(cur)) return p;
       const u = {
         ...p,
-        ...snap.tasks
+        [date]: merged
       };
       ss('mc4_tasks', u);
       return u;
     });
-    // Registros
-    if (snap.regs) setRegs(p => {
+    // Registros — no pisar si agregaste/borraste uno hace menos de 8s
+    if (snap.regs && !(lastEdits.current.regs > now8)) setRegs(p => {
+      if (JSON.stringify(p[date] || []) === JSON.stringify(snap.regs)) return p;
       const u = {
         ...p,
         [date]: snap.regs
@@ -1827,12 +1841,12 @@ function App() {
     if (API_URL && sel && sel !== 'TEST' && role) pullDaySnapshot(sel);
   }, [sel, role]);
 
-  // Polling cada 8s
+  // Polling cada 5s (notas/data en cuasi tiempo real; edits protegidos 8s)
   useEffect(() => {
     if (!API_URL) return;
     const id = setInterval(() => {
       if (sel && sel !== 'TEST') pullDaySnapshot(sel);
-    }, 8000);
+    }, 5000);
     return () => clearInterval(id);
   }, [sel]);
   useEffect(() => {
@@ -1969,6 +1983,7 @@ function App() {
       time: tstr(),
       ...entry
     };
+    lastEdits.current.regs = Date.now();
     setRegs(p => {
       const u = {
         ...p,
@@ -1982,6 +1997,7 @@ function App() {
     addLog('[' + entry.type + (entry.subtype ? ' / ' + entry.subtype : '') + (entry.block ? ' B' + entry.block : '') + '] ' + detail, entry.owner || 'BRUNO');
   }
   function deleteReg(idx) {
+    lastEdits.current.regs = Date.now();
     setRegs(p => {
       const a = [...(p[sel] || [])];
       const r = a.splice(idx, 1)[0];
@@ -2009,6 +2025,7 @@ function App() {
   }
   function toggleTask(id) {
     const task = ALL_T.find(t => t.id === id);
+    lastEdits.current.tasks = Date.now();
     setTasks(p => {
       const dt = p[sel] || {};
       const on = !(dt[id] && dt[id].done);
@@ -2175,6 +2192,12 @@ function App() {
     }, {
       name: 'Notas',
       rows: [['NOTAS DEL DÍA — ' + sel], [''], [dayNotes[sel] || '(sin notas)']]
+    }, {
+      name: 'Editorial',
+      rows: [['EDITORIAL — ' + sel], [''], [(rundown[sel] || {}).editorial || '(sin editorial)']]
+    }, {
+      name: 'Data Mesa',
+      rows: [['DATA MESA — ' + sel], [''], ['🪑 POSICIÓN EN MESA'], [(rundown[sel] || {}).mesaText || '—'], [''], ['💰 TABLA DE PAGOS'], [(rundown[sel] || {}).pagosText || '—'], [''], ['📊 CHIPCOUNT'], [(rundown[sel] || {}).chipsText || '—'], [''], ['📝 NOTAS DE MESA'], [(rundown[sel] || {}).dataNotes || '—']]
     }, {
       name: 'Historial Alarmas',
       rows: [['HORA DISPARO', 'ALARMA', 'TIPO'], ...AUTO_ALARMS.map(a => {
@@ -2458,7 +2481,27 @@ function App() {
         localStorage.removeItem('mc4_role');
       }
     }
-  }, role)), /*#__PURE__*/React.createElement("div", {
+  }, role)), /*#__PURE__*/React.createElement("a", {
+    href: "https://docs.google.com/spreadsheets/d/1pdBeJ4vgjkFSRz3Kvl9VSj3zYwDoaPnl6l7cGHtHDMo/edit",
+    target: "_blank",
+    rel: "noreferrer",
+    title: "Abrir Google Sheet compartido (DayStates)",
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '5px',
+      fontSize: '10px',
+      fontWeight: 600,
+      textDecoration: 'none',
+      color: D.txt2,
+      background: D.sur,
+      border: '1px solid ' + D.brd,
+      borderRadius: '6px',
+      padding: '4px 9px',
+      marginLeft: '8px',
+      whiteSpace: 'nowrap'
+    }
+  }, "📊 Sheet"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       flex: 1
@@ -3953,7 +3996,7 @@ function RundownView({
         fontFamily: D.sans,
         lineHeight: 1.7,
         resize: 'vertical',
-        minHeight: '100px'
+        minHeight: '130px'
       };
       const secLbl = t => /*#__PURE__*/React.createElement("div", {
         style: {
@@ -3973,10 +4016,29 @@ function RundownView({
           flexDirection: 'column',
           gap: '16px'
         }
-      }, /*#__PURE__*/React.createElement("div", null, secLbl('💰 Tabla de pagos'), /*#__PURE__*/React.createElement("textarea", {
-        style: taStyle,
+      }, /*#__PURE__*/React.createElement("div", null, secLbl('🪑 Posición en mesa'), /*#__PURE__*/React.createElement("textarea", {
+        style: {
+          ...taStyle,
+          minHeight: '190px'
+        },
+        value: rd.mesaText || '',
+        rows: 9,
+        placeholder: 'Ej:\nTABLE BLACK\nBlinds: 500 / 1,000 - 1,000 (BB)\n\nDaniel Rezaei / AT / 101,300 / 101\nShuyder Xiao / CN / 73,000 / 73',
+        onChange: e => setRd(p => {
+          const u = {
+            ...p,
+            mesaText: e.target.value
+          };
+          schedSave(u);
+          return u;
+        })
+      })), /*#__PURE__*/React.createElement("div", null, secLbl('💰 Tabla de pagos'), /*#__PURE__*/React.createElement("textarea", {
+        style: {
+          ...taStyle,
+          minHeight: '150px'
+        },
         value: rd.pagosText || '',
-        rows: 6,
+        rows: 7,
         placeholder: 'Ej:\n1° — Juan Pérez (ARG) — $250,000\n2° — Carlos López (MEX) — $150,000\n3° — Ana García (ESP) — $80,000',
         onChange: e => setRd(p => {
           const u = {
@@ -3987,9 +4049,12 @@ function RundownView({
           return u;
         })
       })), /*#__PURE__*/React.createElement("div", null, secLbl('📊 Chipcount'), /*#__PURE__*/React.createElement("textarea", {
-        style: taStyle,
+        style: {
+          ...taStyle,
+          minHeight: '210px'
+        },
         value: rd.chipsText || '',
-        rows: 6,
+        rows: 10,
         placeholder: 'Ej:\n1° — Juan Pérez — 4,500,000\n2° — Carlos López — 3,200,000\n3° — Ana García — 1,800,000',
         onChange: e => setRd(p => {
           const u = {
@@ -3999,29 +4064,13 @@ function RundownView({
           schedSave(u);
           return u;
         })
-      })), /*#__PURE__*/React.createElement("div", null, secLbl('🪑 Posición en mesa'), /*#__PURE__*/React.createElement("textarea", {
-        style: {
-          ...taStyle,
-          minHeight: '70px'
-        },
-        value: rd.mesaText || '',
-        rows: 4,
-        placeholder: 'Ej:\nSilla 1 — Juan Pérez\nSilla 2 — Carlos López\nSilla 3 — Ana García',
-        onChange: e => setRd(p => {
-          const u = {
-            ...p,
-            mesaText: e.target.value
-          };
-          schedSave(u);
-          return u;
-        })
       })), /*#__PURE__*/React.createElement("div", null, secLbl('📝 Notas de mesa'), /*#__PURE__*/React.createElement("textarea", {
         style: {
           ...taStyle,
-          minHeight: '60px'
+          minHeight: '120px'
         },
         value: rd.dataNotes || '',
-        rows: 3,
+        rows: 5,
         placeholder: "Info adicional, nivel actual, blinds, info de color...",
         onChange: e => setRd(p => {
           const u = {
