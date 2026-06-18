@@ -7,6 +7,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
   <style>* {box-sizing:border-box;margin:0;padding:0} html,body{background:#111217;height:100%} #root{height:100%}</style>
 </head>
 <body>
@@ -1319,6 +1321,68 @@ async function ss(k, v) {
 
 // ── ONLINE SYNC — arquitectura snapshot completa por día ─────────────────────
 const API_URL = 'https://script.google.com/macros/s/AKfycbzu-lLbvZNDjhUdA2cFxZOrdWZwML612XwMsFfgVEpmL-GRNOdTHMZfg5goqTVOhPVX/exec';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FIREBASE REALTIME — sync en vivo entre todos los usuarios (< 300ms delay)
+// Google Sheets se mantiene como respaldo histórico (push paralelo en background)
+// ═══════════════════════════════════════════════════════════════════════════
+const FB_CONFIG = {
+  apiKey: "AIzaSyDfs0nUSolkGAPfdoH4BSc0AWA6lFzg1nk",
+  authDomain: "wsop-mission-control.firebaseapp.com",
+  databaseURL: "https://wsop-mission-control-default-rtdb.firebaseio.com",
+  projectId: "wsop-mission-control",
+  storageBucket: "wsop-mission-control.firebasestorage.app",
+  messagingSenderId: "289876994659",
+  appId: "1:289876994659:web:434b8d19e46d3c5587a656"
+};
+let FB_DB = null;
+try {
+  if (typeof firebase !== 'undefined' && firebase.initializeApp) {
+    firebase.initializeApp(FB_CONFIG);
+    FB_DB = firebase.database();
+  }
+} catch (e) {
+  console.warn('Firebase init failed:', e);
+}
+// ID único de este cliente — sirve para ignorar nuestro propio eco
+const CLIENT_ID = (Math.random().toString(36).slice(2, 10)) + '_' + Date.now().toString(36);
+
+// Push instantáneo a Firebase (la fuente de verdad en vivo)
+async function pushDayFirebase(date, stateObj, role) {
+  if (!FB_DB || !date || date === 'TEST') return false;
+  try {
+    await FB_DB.ref('days/' + date).set({
+      ...stateObj,
+      _meta: {
+        by: role || 'anon',
+        at: Date.now(),
+        clientId: CLIENT_ID
+      }
+    });
+    return true;
+  } catch (e) {
+    console.warn('FB push failed:', e);
+    return false;
+  }
+}
+
+// Suscribirse a cambios del día (listener push — sin polling)
+// Devuelve función para desuscribirse
+function subscribeDayFirebase(date, onChange) {
+  if (!FB_DB || !date || date === 'TEST') return () => {};
+  const ref = FB_DB.ref('days/' + date);
+  const handler = ref.on('value', snap => {
+    const val = snap.val();
+    if (!val) return;
+    // Ignorar ecos de nuestro propio push
+    if (val._meta && val._meta.clientId === CLIENT_ID) return;
+    onChange(val);
+  }, err => {
+    console.warn('FB listen error:', err);
+  });
+  return () => ref.off('value', handler);
+}
+
 async function pushDayOnline(date, stateObj, role) {
   if (!API_URL || !date || date === 'TEST') return false;
   try {
@@ -1701,7 +1765,8 @@ function App() {
       rundown: rundown[date] || {},
       feedOvr: feedOvr[date] || '',
       portal: portals[date] || '',
-      closed: closed[date] || false
+      closed: closed[date] || false,
+      custA: (custA || []).map(a => ({ id: a.id, msg: a.msg, fireAt: a.fireAt, u: a.u, gg: a.gg, fired: a.fired || false, firedAt: a.firedAt || null }))
     };
   }
   function applyDaySnapshot(date, snap) {
@@ -1797,6 +1862,22 @@ function App() {
       ss('mc4_feedovr', u);
       return u;
     });
+    // Custom alarms — merge entrantes sin pisar las ya disparadas localmente
+    if (snap.custA && Array.isArray(snap.custA)) {
+      setCustA(prev => {
+        const merged = snap.custA.map(incoming => {
+          const local = prev.find(p => p.id === incoming.id);
+          // Si ya existe localmente, preservar su estado fired
+          if (local) return { ...incoming, fired: local.fired || incoming.fired, firedAt: local.firedAt || incoming.firedAt };
+          return incoming;
+        });
+        // También conservar alarmas locales que no vengan en el snapshot
+        prev.forEach(p => { if (!merged.find(m => m.id === p.id)) merged.push(p); });
+        if (JSON.stringify(merged) === JSON.stringify(prev)) return prev;
+        ss('mc4_ca_' + date, merged);
+        return merged;
+      });
+    }
     // Closed
     if (snap.closed != null) setClosed(p => {
       const u = {
@@ -1821,28 +1902,57 @@ function App() {
     pulling.current = false;
   }
   function schedulePush(date) {
-    if (!API_URL || !role) return;
+    if (!role) return;
     if (pushTimer.current) clearTimeout(pushTimer.current);
     setSyncing(true);
     pushTimer.current = setTimeout(async () => {
       const snap = buildDaySnapshot(date);
-      const ok = await pushDayOnline(date, snap, role);
-      setOnline(ok);
+      // 1. Firebase: tiempo real (< 300ms para todos los usuarios)
+      const fbOk = await pushDayFirebase(date, snap, role);
+      setOnline(fbOk || !!FB_DB);
       setSyncing(false);
-    }, 600);
+      // 2. Google Sheets: respaldo histórico en background (no bloqueante)
+      if (API_URL) pushDayOnline(date, snap, role).catch(() => {});
+    }, 150);
   }
 
-  // Pull al cambiar de día + al elegir rol
+  // Pull al cambiar de día + al elegir rol (carga inicial)
   useEffect(() => {
-    if (API_URL && sel && sel !== 'TEST' && role) pullDaySnapshot(sel);
+    if (sel && sel !== 'TEST' && role) {
+      // Si Firebase está disponible, intentar primero desde ahí (instantáneo)
+      if (FB_DB) {
+        FB_DB.ref('days/' + sel).once('value').then(snap => {
+          const val = snap.val();
+          if (val) applyDaySnapshot(sel, val);
+          setOnline(true);
+        }).catch(() => {
+          // Si Firebase falla, fallback a Google Sheets
+          if (API_URL) pullDaySnapshot(sel);
+        });
+      } else if (API_URL) {
+        pullDaySnapshot(sel);
+      }
+    }
   }, [sel, role]);
 
-  // Polling cada 5s (notas/data en cuasi tiempo real; edits protegidos 8s)
+  // Listener Firebase en tiempo real: cualquier cambio de cualquier usuario
+  // llega acá en < 300ms (sin polling, sin delay)
   useEffect(() => {
-    if (!API_URL) return;
+    if (!FB_DB || !sel || sel === 'TEST') return;
+    const unsubscribe = subscribeDayFirebase(sel, snap => {
+      applyDaySnapshot(sel, snap);
+      setOnline(true);
+    });
+    return unsubscribe;
+  }, [sel]);
+
+  // Fallback polling cada 10s SOLO si Firebase no está disponible
+  // (con Firebase no hace falta porque el listener empuja todo al instante)
+  useEffect(() => {
+    if (FB_DB || !API_URL) return;
     const id = setInterval(() => {
       if (sel && sel !== 'TEST') pullDaySnapshot(sel);
-    }, 5000);
+    }, 10000);
     return () => clearInterval(id);
   }, [sel]);
   useEffect(() => {
@@ -3380,7 +3490,7 @@ function RundownView({
       };
       onSave(u);
       setRd(u);
-    }, 700);
+    }, 250);
   }
   function upd(patch) {
     setRd(p => {
@@ -6470,7 +6580,7 @@ function EmView({
       color: online ? D.green : D.txt3,
       fontWeight: 500
     }
-  }, online ? 'Online · datos compartidos' : 'Sin conexión'), /*#__PURE__*/React.createElement("div", {
+  }, online ? '⚡ Tiempo real · Firebase' : 'Sin conexión'), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: '9px',
       color: D.txt3
