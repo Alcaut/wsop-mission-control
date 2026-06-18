@@ -278,10 +278,12 @@ const SCHED = [{
   ba: '22:00',
   lv: '18:00',
   double: false,
-  t1h: 'Fernando Romano',
-  t1a: 'Diego Ventura — GG Team (hasta 1am)',
-  t2h: '',
+  t1h: 'Fernando Romano + Jacques Blit',
+  t1a: 'Emanuel Marso',
+  t2h: 'Diego Ventura',
   t2a: 'Emanuel Marso (desde las 12)',
+  t1inv: 'Alex Hernando (toda la emisión)',
+  t2inv: 'Alex Hernando (toda la emisión)',
   champ: 'Seth Davies',
   champPrize: '$4,752,551',
   pdfPage: 46
@@ -296,6 +298,7 @@ const SCHED = [{
   double: true,
   t1h: 'Nachittus',
   t1a: 'Julián Nuñez',
+  t1inv: 'Emanuel Marso (@Marsoe.23)',
   t2h: 'Santi Gonzalez',
   t2a: 'Jesús Treviño',
   champ: 'Courtenay Williams',
@@ -304,19 +307,20 @@ const SCHED = [{
 }, {
   d: '2026-06-17',
   wd: 'Miérc.',
-  ev: '#34 Colossus Mesa Final / #51 Mystery Bounty Día 1',
-  st: 'Mesa Final + Día 1',
-  c: 'rojo',
-  ba: '--',
-  lv: 'TBD',
-  double: true,
-  t1h: 'Emanuel Marso',
+  ev: '#51 · $10K NLH Mystery Bounty',
+  st: 'Día 1',
+  c: 'negro',
+  ba: '23:00',
+  lv: '19:00',
+  double: false,
+  note: '⚠️ Audio test 20:00-21:00 BsAs: tono 1kHz + AV sync (bajar ~5dB ganancia interna) | Countdown GGPoker: 22:30 BsAs',
+  t1h: 'Fernando Romano',
   t1a: 'Jacques Blit',
   t2h: 'Santi Gonzalez',
   t2a: 'Jesús Treviño',
-  champ: 'Courtenay Williams',
-  champPrize: '$542,540',
-  pdfPage: 38
+  champ: 'Yosef Fox',
+  champPrize: '$729,333',
+  pdfPage: 57
 }, {
   d: '2026-06-18',
   wd: 'Jueves',
@@ -1313,13 +1317,10 @@ async function ss(k, v) {
   } catch (e) {}
 }
 
-// ── ONLINE SYNC (Google Apps Script) ──────────────────────────────────────────
-// URL hardcodeada — todos los usuarios quedan conectados automáticamente.
+// ── ONLINE SYNC — arquitectura snapshot completa por día ─────────────────────
 const API_URL = 'https://script.google.com/macros/s/AKfycbzu-lLbvZNDjhUdA2cFxZOrdWZwML612XwMsFfgVEpmL-GRNOdTHMZfg5goqTVOhPVX/exec';
-
-// POST sin preflight CORS: text/plain evita el OPTIONS que Apps Script no maneja.
-async function ssOnline(k, v) {
-  if (!API_URL) return false;
+async function pushDayOnline(date, stateObj, role) {
+  if (!API_URL || !date || date === 'TEST') return false;
   try {
     await fetch(API_URL, {
       method: 'POST',
@@ -1327,8 +1328,9 @@ async function ssOnline(k, v) {
         'Content-Type': 'text/plain;charset=utf-8'
       },
       body: JSON.stringify({
-        key: k,
-        value: typeof v === 'string' ? v : JSON.stringify(v)
+        date,
+        state: JSON.stringify(stateObj),
+        updatedBy: role || 'anon'
       }),
       redirect: 'follow'
     });
@@ -1337,18 +1339,116 @@ async function ssOnline(k, v) {
     return false;
   }
 }
-async function sgOnline(k) {
-  if (!API_URL) return null;
+async function fetchDayOnline(date) {
+  if (!API_URL || !date || date === 'TEST') return null;
   try {
-    const r = await fetch(API_URL + '?key=' + encodeURIComponent(k), {
+    const r = await fetch(API_URL + '?date=' + encodeURIComponent(date), {
       redirect: 'follow'
     });
-    if (r.ok) {
-      const t = await r.text();
-      return t || null;
-    }
+    if (!r.ok) return null;
+    const j = await r.json();
+    if (j.ok && j.state) return JSON.parse(j.state);
   } catch (e) {}
   return null;
+}
+
+// ── ROLE SELECTOR ─────────────────────────────────────────────────────────────
+function RoleSelector({
+  onSelect
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(0,0,0,.88)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 9999
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#1a1d24',
+      border: '1px solid #2a2d35',
+      borderRadius: '16px',
+      padding: '36px 40px',
+      textAlign: 'center',
+      maxWidth: '380px',
+      width: '90%'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '28px',
+      marginBottom: '6px'
+    }
+  }, "\uD83C\uDF9B"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '20px',
+      fontWeight: 700,
+      color: '#fff',
+      marginBottom: '3px'
+    }
+  }, "Mission Control"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '12px',
+      color: '#666',
+      marginBottom: '28px'
+    }
+  }, "CodigoPoker \xB7 WSOP 2026"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '11px',
+      color: '#555',
+      marginBottom: '14px',
+      textTransform: 'uppercase',
+      letterSpacing: '.08em'
+    }
+  }, "Entr\xE1s como:"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: '12px',
+      justifyContent: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => onSelect('DIRECTOR'),
+    style: {
+      padding: '14px 24px',
+      fontSize: '14px',
+      fontWeight: 600,
+      borderRadius: '10px',
+      cursor: 'pointer',
+      background: '#1a3a1a',
+      color: '#7dbd7d',
+      border: '1px solid #2a5a2a',
+      minWidth: '120px'
+    }
+  }, "\uD83C\uDFAC Director", /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '10px',
+      fontWeight: 400,
+      color: '#5a9a5a',
+      marginTop: '3px'
+    }
+  }, "Acceso completo")), /*#__PURE__*/React.createElement("button", {
+    onClick: () => onSelect('VISITOR'),
+    style: {
+      padding: '14px 24px',
+      fontSize: '14px',
+      fontWeight: 600,
+      borderRadius: '10px',
+      cursor: 'pointer',
+      background: '#1a2a3a',
+      color: '#7aade0',
+      border: '1px solid #1a3a5a',
+      minWidth: '120px'
+    }
+  }, "\uD83D\uDC41 Visitor", /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '10px',
+      fontWeight: 400,
+      color: '#5a85b0',
+      marginTop: '3px'
+    }
+  }, "Lectura + Notas")))));
 }
 function makeExcel(sheets, filename) {
   try {
@@ -1443,20 +1543,21 @@ function App() {
   const [online, setOnline] = useState(!!API_URL); // conectado a Apps Script
   const [syncing, setSyncing] = useState(false); // mostrando indicador de sync
   const [rundown, setRundown] = useState({}); // rundown por fecha mc4_rundown_DATE
-  const [promoSt, setPromoSt] = useState({}); // estado cola promos por fecha mc4_promos_DATE
+  const [promoSt, setPromoSt] = useState({}); // estado cola promos por fecha
   const [promoCfg, setPromoCfg] = useState(null);
-  const [dirTasks, setDirTasks] = useState({}); // checked tasks per day mc4_dir_chk // config editable de promos mc4_promo_cfg
+  const [dirTasks, setDirTasks] = useState({});
   const [stats, setStats] = useState({});
   const [dir, setDir] = useState('Nahuel');
   const [now, setNow] = useState(new Date());
   const [copied, setCopied] = useState(null);
-  const [notifications, setNotifications] = useState([]); // stacked alarm alerts
+  const [notifications, setNotifications] = useState([]);
   const [custA, setCustA] = useState([]);
-  const [firedLog, setFiredLog] = useState({}); // {sel_id: 'HH:MM'} — when each alarm fired
+  const [firedLog, setFiredLog] = useState({});
   const [feedOvr, setFeedOvr] = useState({});
   const [portals, setPortals] = useState({});
   const [briefs, setBriefs] = useState({});
-  const [closed, setClosed] = useState({}); // {date: bool} — jornada cerrada
+  const [closed, setClosed] = useState({});
+  const [role, setRole] = useState(null); // null=no elegido, 'DIRECTOR', 'VISITOR'
   const fired = useRef({});
   useEffect(() => {
     const t = today();
@@ -1568,98 +1669,172 @@ function App() {
     });
   }, [sel]);
 
-  // ── ONLINE SYNC ────────────────────────────────────────────────────────────
-  // Trae notas + editorial + data mesa del día seleccionado desde Apps Script,
-  // y hace polling cada 15s para que todos los usuarios vean lo mismo.
+  // ── ROLE: cargar de localStorage al iniciar ─────────────────────────────────
+  useEffect(() => {
+    const saved = localStorage.getItem('mc4_role');
+    if (saved === 'DIRECTOR' || saved === 'VISITOR') setRole(saved);
+  }, []);
+  function selectRole(r) {
+    setRole(r);
+    localStorage.setItem('mc4_role', r);
+    // Al elegir rol, hacer pull inmediato del día actual
+    if (API_URL && sel && sel !== 'TEST') pullDaySnapshot(sel);
+  }
+
+  // ── SNAPSHOT SYNC — arquitectura PokerDesk ──────────────────────────────────
+  // Un objeto completo por día: push en cualquier cambio, pull cada 8 segundos.
   const pulling = useRef(false);
-  const lastNoteEdit = useRef(0);
-  async function pullDay(date) {
+  const pushTimer = useRef(null);
+  const lastEdits = useRef({}); // {field: timestamp} — guard anti-pisado al tipear
+
+  function buildDaySnapshot(date) {
+    return {
+      phase: phase || 'pre',
+      tasks: tasks || {},
+      regs: regs[date] || [],
+      dayNote: dayNotes[date] || '',
+      ytUrl: ytUrls[date] || '',
+      promoSt: promoSt[date] || {},
+      rundown: rundown[date] || {},
+      feedOvr: feedOvr[date] || '',
+      portal: portals[date] || '',
+      closed: closed[date] || false
+    };
+  }
+  function applyDaySnapshot(date, snap) {
+    if (!snap) return;
+    const now8 = Date.now() - 8000;
+    // Fase — siempre aplicar (acción intencional, no texto)
+    if (snap.phase) setPhase(p => {
+      if (p === snap.phase) return p;
+      ss('mc4_phase_' + date, snap.phase);
+      return snap.phase;
+    });
+    // Tareas — merge: incoming wins para tasks que el usuario no tocó en 8s
+    if (snap.tasks) setTasks(p => {
+      const u = {
+        ...p,
+        ...snap.tasks
+      };
+      ss('mc4_tasks', u);
+      return u;
+    });
+    // Registros
+    if (snap.regs) setRegs(p => {
+      const u = {
+        ...p,
+        [date]: snap.regs
+      };
+      ss('mc4_regs', u);
+      return u;
+    });
+    // Notas — solo si no se editó recientemente
+    if (snap.dayNote != null && !(lastEdits.current.dayNote > now8)) {
+      setDayNotes(p => {
+        if ((p[date] || '') === snap.dayNote) return p;
+        const u = {
+          ...p,
+          [date]: snap.dayNote
+        };
+        ss('mc4_notes', u);
+        return u;
+      });
+    }
+    // YT URL
+    if (snap.ytUrl != null) setYtUrls(p => {
+      if ((p[date] || '') === snap.ytUrl) return p;
+      const u = {
+        ...p,
+        [date]: snap.ytUrl
+      };
+      ss('mc4_ytUrls', u);
+      return u;
+    });
+    // Promos
+    if (snap.promoSt) setPromoSt(p => {
+      const u = {
+        ...p,
+        [date]: snap.promoSt
+      };
+      ss('mc4_promos', u);
+      return u;
+    });
+    // Rundown (editorial + data) — guard por campo
+    if (snap.rundown) {
+      setRundown(p => {
+        const cur = p[date] || {};
+        const u = {
+          ...cur
+        };
+        const txtFields = ['editorial', 'pagosText', 'chipsText', 'mesaText', 'dataNotes'];
+        txtFields.forEach(f => {
+          if (snap.rundown[f] != null && !(lastEdits.current[f] > now8) && snap.rundown[f] !== (cur[f] || '')) u[f] = snap.rundown[f];
+        });
+        const u2 = {
+          ...p,
+          [date]: u
+        };
+        ss('mc4_rundown', u2);
+        return u2;
+      });
+    }
+    // Feed override
+    if (snap.feedOvr != null) setFeedOvr(p => {
+      const u = {
+        ...p,
+        [date]: snap.feedOvr
+      };
+      ss('mc4_feedovr', u);
+      return u;
+    });
+    // Closed
+    if (snap.closed != null) setClosed(p => {
+      const u = {
+        ...p,
+        [date]: snap.closed
+      };
+      ss('mc4_closed', u);
+      schedulePush(sel);
+      return u;
+    });
+  }
+  async function pullDaySnapshot(date) {
     if (!API_URL || !date || date === 'TEST' || pulling.current) return;
     pulling.current = true;
     try {
-      const [note, edi, data] = await Promise.all([sgOnline('note_' + date), sgOnline('edi_' + date), sgOnline('data_' + date)]);
-      // No pisar notas si el usuario tipeó hace menos de 8s
-      if (note != null && Date.now() - lastNoteEdit.current > 8000) {
-        setDayNotes(p => {
-          if ((p[date] || '') === note) return p;
-          const u = {
-            ...p,
-            [date]: note
-          };
-          ss('mc4_notes', u);
-          return u;
-        });
-      }
-      if (edi != null) {
-        try {
-          const eObj = JSON.parse(edi);
-          setRundown(p => {
-            const cur = p[date] || {};
-            if ((cur.editorial || '') === (eObj.editorial || '')) return p;
-            const u = {
-              ...p,
-              [date]: {
-                ...cur,
-                editorial: eObj.editorial
-              }
-            };
-            ss('mc4_rundown', u);
-            return u;
-          });
-        } catch (e) {}
-      }
-      if (data != null) {
-        try {
-          const dObj = JSON.parse(data);
-          setRundown(p => {
-            const cur = p[date] || {};
-            const same = ['pagosText', 'chipsText', 'mesaText', 'dataNotes'].every(k => (cur[k] || '') === (dObj[k] || ''));
-            if (same) return p;
-            const u = {
-              ...p,
-              [date]: {
-                ...cur,
-                ...dObj
-              }
-            };
-            ss('mc4_rundown', u);
-            return u;
-          });
-        } catch (e) {}
-      }
+      const snap = await fetchDayOnline(date);
+      if (snap) applyDaySnapshot(date, snap);
       setOnline(true);
     } catch (e) {
       setOnline(false);
     }
     pulling.current = false;
   }
+  function schedulePush(date) {
+    if (!API_URL || !role) return;
+    if (pushTimer.current) clearTimeout(pushTimer.current);
+    setSyncing(true);
+    pushTimer.current = setTimeout(async () => {
+      const snap = buildDaySnapshot(date);
+      const ok = await pushDayOnline(date, snap, role);
+      setOnline(ok);
+      setSyncing(false);
+    }, 600);
+  }
 
-  // Pull al cambiar de día
+  // Pull al cambiar de día + al elegir rol
   useEffect(() => {
-    if (API_URL && sel && sel !== 'TEST') pullDay(sel);
-  }, [sel]);
+    if (API_URL && sel && sel !== 'TEST' && role) pullDaySnapshot(sel);
+  }, [sel, role]);
 
-  // Polling cada 15s del día activo
+  // Polling cada 8s
   useEffect(() => {
     if (!API_URL) return;
     const id = setInterval(() => {
-      if (sel && sel !== 'TEST') pullDay(sel);
-    }, 15000);
+      if (sel && sel !== 'TEST') pullDaySnapshot(sel);
+    }, 8000);
     return () => clearInterval(id);
   }, [sel]);
-
-  // Push con debounce (espera 800ms tras la última tecla antes de enviar)
-  const pushTimers = useRef({});
-  function pushOnline(key, value) {
-    if (!API_URL) return;
-    if (pushTimers.current[key]) clearTimeout(pushTimers.current[key]);
-    setSyncing(true);
-    pushTimers.current[key] = setTimeout(async () => {
-      const ok = await ssOnline(key, value);
-      setOnline(ok);
-      setSyncing(false);
-    }, 800);
-  }
   useEffect(() => {
     if (sel && PORTAL_NAMES[sel]) {
       setPortals(p => {
@@ -1800,6 +1975,7 @@ function App() {
         [sel]: [...(p[sel] || []), e]
       };
       ss('mc4_regs', u);
+      schedulePush(sel);
       return u;
     });
     const detail = entry.person || entry.jugador || entry.desc || entry.titulo || entry.filename || entry.texto || '';
@@ -1815,6 +1991,7 @@ function App() {
       };
       ss('mc4_regs', u);
       addLog('🗑 Eliminado: [' + r.type + '] ' + r.time);
+      schedulePush(sel);
       return u;
     });
   }
@@ -1848,6 +2025,7 @@ function App() {
         }
       };
       ss('mc4_tasks', u);
+      schedulePush(sel);
       return u;
     });
     if (task && !(tasks[sel] && tasks[sel][id] && tasks[sel][id].done)) {
@@ -1860,6 +2038,7 @@ function App() {
     ss('mc4_phase_' + sel, p);
     addLog('Fase → ' + p.toUpperCase());
     beep(p === 'live' ? 'critical' : 'normal');
+    schedulePush(sel);
   }
   function closeJornada() {
     if (!window.confirm('¿Cerrar la jornada del ' + sel + '?\nQuedará marcada como completada en el calendario.')) return;
@@ -2207,7 +2386,9 @@ function App() {
   };
   return /*#__PURE__*/React.createElement("div", {
     style: S.root
-  }, /*#__PURE__*/React.createElement("style", null, CSS), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("style", null, CSS), !role && /*#__PURE__*/React.createElement(RoleSelector, {
+    onSelect: selectRole
+  }), /*#__PURE__*/React.createElement("div", {
     style: S.hdr
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -2260,7 +2441,24 @@ function App() {
       letterSpacing: '.12em',
       textTransform: 'uppercase'
     }
-  }, "WSOP 2026"))), /*#__PURE__*/React.createElement("div", {
+  }, "WSOP 2026")), role && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: '9px',
+      padding: '2px 7px',
+      borderRadius: '4px',
+      fontWeight: 700,
+      letterSpacing: '.06em',
+      background: role === 'DIRECTOR' ? '#1a3a1a' : '#1a2a3a',
+      color: role === 'DIRECTOR' ? '#7dbd7d' : '#7aade0',
+      border: '1px solid ' + (role === 'DIRECTOR' ? '#2a5a2a' : '#1a3a5a')
+    },
+    onClick: () => {
+      if (window.confirm('¿Cambiar de rol?')) {
+        setRole(null);
+        localStorage.removeItem('mc4_role');
+      }
+    }
+  }, role)), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       flex: 1
@@ -2461,13 +2659,13 @@ function App() {
     phase: phase,
     onPhase: doPhase,
     tasks: tasks,
-    toggleTask: toggleTask,
+    toggleTask: role === 'DIRECTOR' ? toggleTask : () => {},
     logs: logs[sel] || [],
-    addLog: addLog,
-    deleteLog: deleteLog,
+    addLog: role === 'DIRECTOR' ? addLog : () => {},
+    deleteLog: role === 'DIRECTOR' ? deleteLog : () => {},
     regs: regs[sel] || [],
-    addReg: addReg,
-    deleteReg: deleteReg,
+    addReg: role === 'DIRECTOR' ? addReg : () => {},
+    deleteReg: role === 'DIRECTOR' ? deleteReg : () => {},
     dir: dir,
     onDir: v => {
       setDir(v);
@@ -2515,7 +2713,7 @@ function App() {
     },
     dayNote: dayNotes[sel] || '',
     onDayNote: v => {
-      lastNoteEdit.current = Date.now();
+      lastEdits.current.dayNote = Date.now();
       setDayNotes(p => {
         const u = {
           ...p,
@@ -2524,7 +2722,7 @@ function App() {
         ss('mc4_notes', u);
         return u;
       });
-      pushOnline('note_' + sel, v);
+      schedulePush(sel);
     },
     ytUrl: ytUrls[sel] || '',
     onYtUrl: v => {
@@ -2536,9 +2734,11 @@ function App() {
         ss('mc4_ytUrls', u);
         return u;
       });
+      schedulePush(sel);
     },
     online: online,
     syncing: syncing,
+    role: role,
     promoSt: promoSt[sel] || null,
     onPromoSt: v => {
       setPromoSt(p => {
@@ -2547,6 +2747,7 @@ function App() {
           [sel]: v
         };
         ss('mc4_promos', u);
+        schedulePush(sel);
         return u;
       });
     },
@@ -2606,16 +2807,7 @@ function App() {
         ss('mc4_rundown', u);
         return u;
       });
-      // Push editorial y data mesa por separado para sincronizar online
-      pushOnline('edi_' + sel, JSON.stringify({
-        editorial: v.editorial || ''
-      }));
-      pushOnline('data_' + sel, JSON.stringify({
-        pagosText: v.pagosText || '',
-        chipsText: v.chipsText || '',
-        mesaText: v.mesaText || '',
-        dataNotes: v.dataNotes || ''
-      }));
+      schedulePush(sel);
     }
   }), tab === 'info' && /*#__PURE__*/React.createElement(TmplView, {
     copyText: copyText,
@@ -2923,9 +3115,9 @@ const DATA_TITULOS = {
     replay: '[REPLAY] WSOP 2026 EN ESPAÑOL | $500 Colossus NLH DIA 4 - MESA FINAL'
   },
   '2026-06-17': {
-    programar: 'WSOP 2026 EN ESPAÑOL | $500 Colossus NLH MESA FINAL',
-    inicio: '🔴 MESA FINAL | WSOP 2026 EN ESPAÑOL | $500 Colossus NLH',
-    replay: '[REPLAY] WSOP 2026 EN ESPAÑOL | $500 Colossus NLH MESA FINAL'
+    programar: 'WSOP 2026 EN ESPAÑOL | $10K Mystery Bounty NLH DIA 1',
+    inicio: '🔴 DIA 1 | WSOP 2026 EN ESPAÑOL | $10K Mystery Bounty NLH',
+    replay: '[REPLAY] WSOP 2026 EN ESPAÑOL | $10K Mystery Bounty NLH DIA 1'
   },
   '2026-06-18': {
     programar: 'WSOP 2026 EN ESPAÑOL | $10K Mystery Bounty NLH DIA 2',
@@ -5647,6 +5839,7 @@ function EmView({
   onYtUrl,
   online,
   syncing,
+  role,
   promoSt,
   onPromoSt,
   promoCfg,
@@ -5660,6 +5853,7 @@ function EmView({
   copyText,
   copied
 }) {
+  const isDir = role === 'DIRECTOR';
   const [sec, setSec] = useState('alarms');
   const [regOpen, setRegOpen] = useState(null);
   const [taskForm, setTaskForm] = useState({
@@ -6145,7 +6339,7 @@ function EmView({
       flexDirection: 'column',
       gap: '8px'
     }
-  }, !isClosed && phase !== 'post' && /*#__PURE__*/React.createElement("button", {
+  }, !isClosed && phase !== 'post' && isDir && /*#__PURE__*/React.createElement("button", {
     className: phase === 'pre' ? 'btn-green' : 'btn-red',
     style: {
       width: '100%',
@@ -6155,7 +6349,7 @@ function EmView({
       fontWeight: 700
     },
     onClick: () => onPhase(phase === 'pre' ? 'live' : 'post')
-  }, phase === 'pre' ? '▶ ABRIR EMISIÓN' : '⏹ CERRAR EMISIÓN'), /*#__PURE__*/React.createElement("button", {
+  }, phase === 'pre' ? '▶ ABRIR EMISIÓN' : '⏹ CERRAR EMISIÓN'), isDir && /*#__PURE__*/React.createElement("button", {
     className: "btn-green",
     style: {
       width: '100%',
@@ -7414,7 +7608,7 @@ function EmView({
     const t1End = parseHasta(day.t1a) || (feedM !== null ? clockStr((feedM + introOff + 240 + 1440) % 1440) : null);
     const t1Start = at(introOff);
     const introLabel = day.introOff ? `INTRO (${Math.abs(introOff)} min especial)` : 'INTRO';
-    const briefText = [`⚠️ WSOP 2026 — ${day.wd} ${ddmm}`, `${day.ev} — ${day.st}`, '', `HORARIOS BsAs:`, `${at(cuentaAtrasOff - 60)} hs — Talentos conectados`, `${at(cuentaAtrasOff)} hs — Cuenta atrás (pantalla 10 min)`, `${t1Start} hs — ${introLabel}`, `${at(0)} hs — LIVE`, '', `🎙 TURNO 1: ${t1()}${day.t1inv ? '\n   🎙 Invitado T1: ' + day.t1inv : ''}`, ...(t1End ? [`   ${t1Start} hs → ${t1End} hs`] : []), `🎙 TURNO 2: ${t2()}${day.t2inv ? '\n   🎙 Invitado T2: ' + day.t2inv : ''}`, ...(t1End ? [`   Desde ${t1End} hs (duración variable)`] : []), ...(day.note ? ['', `⚠️ ${day.note}`] : []), ...(kw ? [`REDES: ${kw}`] : [])].join('\n');
+    const briefText = [`⚠️ WSOP 2026 — ${day.wd} ${ddmm}`, `${day.ev} — ${day.st}`, '', `HORARIOS BsAs:`, `${at(cuentaAtrasOff - 60)} hs — Talentos conectados`, `${at(cuentaAtrasOff)} hs — Cuenta atrás`, `${t1Start} hs — ${introLabel}`, `${at(0)} hs — LIVE`, '', `🎙 TURNO 1: ${t1()}${day.t1inv ? '\n   🎙 Invitado T1: ' + day.t1inv : ''}`, ...(t1End ? [`   ${t1Start} hs → ${t1End} hs`] : []), `🎙 TURNO 2: ${t2()}${day.t2inv ? '\n   🎙 Invitado T2: ' + day.t2inv : ''}`, ...(t1End ? [`   Desde ${t1End} hs (duración variable)`] : []), ...(day.note ? ['', `⚠️ ${day.note}`] : []), ...(kw ? [`REDES: ${kw}`] : [])].join('\n');
     return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
       style: {
         background: D.card,
