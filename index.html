@@ -1322,8 +1322,12 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbzu-lLbvZNDjhUdA2cFxZOr
 async function pushDayOnline(date, stateObj, role) {
   if (!API_URL || !date || date === 'TEST') return false;
   try {
-    const r = await fetch(API_URL, {
+    // mode:'no-cors' es clave para Google Apps Script:
+    // evita que el browser tire el body al seguir la redirección 302 de Google.
+    // Con no-cors la respuesta es opaca (no legible) pero el dato SÍ llega.
+    await fetch(API_URL, {
       method: 'POST',
+      mode: 'no-cors',
       headers: {
         'Content-Type': 'text/plain;charset=utf-8'
       },
@@ -1331,17 +1335,9 @@ async function pushDayOnline(date, stateObj, role) {
         date,
         state: JSON.stringify(stateObj),
         updatedBy: role || 'anon'
-      }),
-      redirect: 'follow'
+      })
     });
-    // Intentar confirmar persistencia. Si el body no se puede leer por CORS
-    // pero el POST salió sin error, lo damos por enviado (el dato llegó a Google).
-    try {
-      const j = await r.json();
-      return j && j.ok === false ? false : true;
-    } catch (_) {
-      return true;
-    }
+    return true;
   } catch (e) {
     return false;
   }
