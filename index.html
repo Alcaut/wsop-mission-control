@@ -1878,14 +1878,13 @@ function App() {
         return merged;
       });
     }
-    // Closed
+    // Closed — sin schedulePush: recibir datos NUNCA dispara push de vuelta
     if (snap.closed != null) setClosed(p => {
       const u = {
         ...p,
         [date]: snap.closed
       };
       ss('mc4_closed', u);
-      schedulePush(sel);
       return u;
     });
   }
@@ -1902,7 +1901,8 @@ function App() {
     pulling.current = false;
   }
   function schedulePush(date) {
-    if (!role) return;
+    // Solo DIRECTOR pushea el estado completo; VISITOR solo puede pushear desde onDayNote
+    if (!role || role === 'VISITOR') return;
     if (pushTimer.current) clearTimeout(pushTimer.current);
     setSyncing(true);
     pushTimer.current = setTimeout(async () => {
@@ -2869,6 +2869,17 @@ function App() {
           [sel]: v
         };
         ss('mc4_notes', u);
+        // VISITOR puede pushear su nota al instante (push parcial — solo dayNote)
+        if (role === 'VISITOR' && FB_DB && sel && sel !== 'TEST') {
+          clearTimeout(window._visitorNoteTimer);
+          window._visitorNoteTimer = setTimeout(() => {
+            FB_DB.ref('days/' + sel + '/dayNote').set(v).catch(() => {});
+            if (API_URL) {
+              const noteSnap = { dayNote: v };
+              pushDayOnline(sel, noteSnap, 'VISITOR').catch(() => {});
+            }
+          }, 300);
+        }
         return u;
       });
       schedulePush(sel);
@@ -7162,7 +7173,7 @@ function EmView({
       flexDirection: 'column',
       gap: '10px'
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, role !== 'VISITOR' && /*#__PURE__*/React.createElement("div", {
     style: {
       ...S.card
     }
