@@ -2186,6 +2186,13 @@ function App() {
     setCustA(p => {
       const u = [...p, a];
       ss('mc4_ca_' + sel, u);
+      // Push directo a Firebase con el nuevo valor — evita closure stale
+      if (FB_DB && sel && sel !== 'TEST') {
+        FB_DB.ref('days/' + sel + '/custA').set(u.map(x => ({
+          id: x.id, msg: x.msg, fireAt: x.fireAt, fired: x.fired || false, delayMins: x.delayMins || 0
+        }))).catch(() => {});
+      }
+      if (API_URL) setTimeout(() => pushDayOnline(sel, buildDaySnapshot(sel), role).catch(() => {}), 400);
       return u;
     });
   }
@@ -2193,6 +2200,11 @@ function App() {
     setCustA(p => {
       const u = p.filter(a => a.id !== id);
       ss('mc4_ca_' + sel, u);
+      if (FB_DB && sel && sel !== 'TEST') {
+        FB_DB.ref('days/' + sel + '/custA').set(u.map(x => ({
+          id: x.id, msg: x.msg, fireAt: x.fireAt, fired: x.fired || false, delayMins: x.delayMins || 0
+        }))).catch(() => {});
+      }
       return u;
     });
   }
@@ -2907,7 +2919,10 @@ function App() {
           [sel]: v
         };
         ss('mc4_promos', u);
-        schedulePush(sel);
+        // Push promoSt directo a Firebase (evita closure stale + anti-pattern)
+        if (FB_DB && sel && sel !== 'TEST') {
+          FB_DB.ref('days/' + sel + '/promoSt').set(v).catch(() => {});
+        }
         return u;
       });
     },
@@ -7023,7 +7038,7 @@ function EmView({
         flexShrink: 0
       },
       onClick: () => removeCustAlarm(a.id)
-    }, "\u2715"));
+    }, role === 'VISITOR' ? null : "\u2715"));
   })), (() => {
     const autoFired = alarmStrip.filter(a => !!a.firedAt).map(a => ({
       k: 'af_' + a.id,
@@ -7165,7 +7180,7 @@ function EmView({
           flexShrink: 0
         },
         onClick: () => removeCustAlarm(a.cid)
-      }, "\u2715"));
+      }, role === 'VISITOR' ? null : "\u2715"));
     }));
   })()), /*#__PURE__*/React.createElement("div", {
     style: {
