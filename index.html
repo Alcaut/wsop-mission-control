@@ -2990,9 +2990,10 @@ function App() {
     onCfg: v => {
       setPromoCfg(v);
       ss('mc4_promo_cfg', v);
-      // Sincronizar orden/config de promos a Firebase para todos
-      fbSet('promoCfg', v);
-      schedulePush(sel);
+      // Push directo a Firebase con el valor nuevo (evita closure stale)
+      if (FB_DB && sel && sel !== 'TEST') {
+        FB_DB.ref('days/' + sel + '/promoCfg').set(v).catch(() => {});
+      }
     }
   }), tab === 'rundown' && /*#__PURE__*/React.createElement(RundownView, {
     sel: sel,
@@ -5389,6 +5390,9 @@ function PromoQueue({
     const id = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(id);
   }, []);
+  // Ref para leer siempre el promoSt más reciente dentro del setInterval (evita closure stale)
+  const promoStRef = React.useRef(promoSt);
+  React.useEffect(() => { promoStRef.current = promoSt; }, [promoSt]);
 
   // Audio context — reuse to avoid browser gesture issue
   const audioCtx = React.useRef(null);
@@ -5440,7 +5444,7 @@ function PromoQueue({
     if (!st.started || st.phase === 'done') return;
     const id = setInterval(() => {
       const n = Date.now();
-      const s = promoSt || def();
+      const s = promoStRef.current || def();
       if (!s.started || s.cur >= queue.length) return;
       if (s.phase === 'idle') return;
       if (s.paused) return; // pausado — no avanzar
