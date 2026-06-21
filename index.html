@@ -1900,20 +1900,22 @@ function App() {
     }
     pulling.current = false;
   }
+  // Helper: escribir UN campo a Firebase al instante (sin stale closure)
+  function fbSet(field, value) {
+    if (!FB_DB || !sel || sel === 'TEST') return;
+    FB_DB.ref('days/' + sel + '/' + field).set(value).catch(() => {});
+  }
+
   function schedulePush(date) {
-    // Solo DIRECTOR pushea el estado completo; VISITOR solo puede pushear desde onDayNote
+    // schedulePush YA NO toca Firebase — solo guarda en Google Sheets como backup
+    // Firebase recibe escrituras de campo individual desde cada handler
     if (!role || role === 'VISITOR') return;
     if (pushTimer.current) clearTimeout(pushTimer.current);
-    setSyncing(true);
     pushTimer.current = setTimeout(async () => {
       const snap = buildDaySnapshot(date);
-      // 1. Firebase: tiempo real (< 300ms para todos los usuarios)
-      const fbOk = await pushDayFirebase(date, snap, role);
-      setOnline(fbOk || !!FB_DB);
-      setSyncing(false);
-      // 2. Google Sheets: respaldo histórico en background (no bloqueante)
+      // Solo Google Sheets (backup histórico, no importa si llega con delay)
       if (API_URL) pushDayOnline(date, snap, role).catch(() => {});
-    }, 150);
+    }, 2000);
   }
 
   // Pull al cambiar de día + al elegir rol (carga inicial)
@@ -2097,7 +2099,6 @@ function App() {
       if (FB_DB && sel && sel !== 'TEST') {
         FB_DB.ref('days/' + sel + '/regs').set(newRegs).catch(() => {});
       }
-      if (API_URL) setTimeout(() => pushDayOnline(sel, buildDaySnapshot(sel), role).catch(() => {}), 500);
       return u;
     });
     const detail = entry.person || entry.jugador || entry.desc || entry.titulo || entry.filename || entry.texto || '';
@@ -2114,7 +2115,6 @@ function App() {
       if (FB_DB && sel && sel !== 'TEST') {
         FB_DB.ref('days/' + sel + '/regs').set(a).catch(() => {});
       }
-      if (API_URL) setTimeout(() => pushDayOnline(sel, buildDaySnapshot(sel), role).catch(() => {}), 500);
       return u;
     });
   }
@@ -2146,7 +2146,6 @@ function App() {
       if (FB_DB && sel && sel !== 'TEST') {
         FB_DB.ref('days/' + sel + '/tasks').set(newDayTasks).catch(() => {});
       }
-      if (API_URL) setTimeout(() => pushDayOnline(sel, buildDaySnapshot(sel), role).catch(() => {}), 500);
       return u;
     });
     if (task && !(tasks[sel] && tasks[sel][id] && tasks[sel][id].done)) {
@@ -2163,7 +2162,6 @@ function App() {
     if (FB_DB && sel && sel !== 'TEST') {
       FB_DB.ref('days/' + sel + '/phase').set(p).catch(() => {});
     }
-    if (API_URL) setTimeout(() => pushDayOnline(sel, buildDaySnapshot(sel), role).catch(() => {}), 500);
   }
   function closeJornada() {
     if (!window.confirm('¿Cerrar la jornada del ' + sel + '?\nQuedará marcada como completada en el calendario.')) return;
@@ -2194,7 +2192,6 @@ function App() {
           id: x.id, msg: x.msg, fireAt: x.fireAt, fired: x.fired || false, delayMins: x.delayMins || 0
         }))).catch(() => {});
       }
-      if (API_URL) setTimeout(() => pushDayOnline(sel, buildDaySnapshot(sel), role).catch(() => {}), 400);
       return u;
     });
   }
@@ -2844,24 +2841,22 @@ function App() {
     feedOvrVal: feedOvr[sel] || '',
     onFeedOvr: v => {
       setFeedOvr(p => {
-        const u = {
-          ...p,
-          [sel]: v
-        };
+        const u = { ...p, [sel]: v };
         ss('mc4_feedovr', u);
         return u;
       });
+      fbSet('feedOvr', v);
+      schedulePush(sel);
     },
     portal: portals[sel] || '',
     onPortal: v => {
       setPortals(p => {
-        const u = {
-          ...p,
-          [sel]: v
-        };
+        const u = { ...p, [sel]: v };
         ss('mc4_portals', u);
         return u;
       });
+      fbSet('portal', v);
+      schedulePush(sel);
     },
     brief: briefs[sel] || '',
     onBrief: v => {
@@ -2878,36 +2873,25 @@ function App() {
     onDayNote: v => {
       lastEdits.current.dayNote = Date.now();
       setDayNotes(p => {
-        const u = {
-          ...p,
-          [sel]: v
-        };
+        const u = { ...p, [sel]: v };
         ss('mc4_notes', u);
-        // VISITOR puede pushear su nota al instante (push parcial — solo dayNote)
-        if (role === 'VISITOR' && FB_DB && sel && sel !== 'TEST') {
-          clearTimeout(window._visitorNoteTimer);
-          window._visitorNoteTimer = setTimeout(() => {
-            FB_DB.ref('days/' + sel + '/dayNote').set(v).catch(() => {});
-            if (API_URL) {
-              const noteSnap = { dayNote: v };
-              pushDayOnline(sel, noteSnap, 'VISITOR').catch(() => {});
-            }
-          }, 300);
-        }
         return u;
       });
+      // Todos (DIRECTOR y VISITOR) escriben dayNote directo a Firebase
+      clearTimeout(window._noteTimer);
+      window._noteTimer = setTimeout(() => {
+        fbSet('dayNote', v);
+      }, 300);
       schedulePush(sel);
     },
     ytUrl: ytUrls[sel] || '',
     onYtUrl: v => {
       setYtUrls(p => {
-        const u = {
-          ...p,
-          [sel]: v
-        };
+        const u = { ...p, [sel]: v };
         ss('mc4_ytUrls', u);
         return u;
       });
+      fbSet('ytUrl', v);
       schedulePush(sel);
     },
     online: online,
@@ -2985,7 +2969,6 @@ function App() {
       if (FB_DB && sel && sel !== 'TEST') {
         FB_DB.ref('days/' + sel + '/rundown').set(v).catch(() => {});
       }
-      if (API_URL) setTimeout(() => pushDayOnline(sel, buildDaySnapshot(sel), role).catch(() => {}), 500);
     }
   }), tab === 'info' && /*#__PURE__*/React.createElement(TmplView, {
     copyText: copyText,
