@@ -1599,6 +1599,14 @@ const S = {
 };
 
 // ─── APP ──────────────────────────────────────────────────────────────────────
+const CHANNELS_DEF = [
+  { id: 'yt_cp',   label: 'YouTube CodigoPoker',     handle: 'CodigoPoker',          color: '#ff0000' },
+  { id: 'tw_cp',   label: 'Twitch CodigoPoker',      handle: 'CodigoPlay',           color: '#9146ff' },
+  { id: 'x_cp',    label: 'X / Twitter CodigoPoker', handle: '@CodigoPoker',         color: '#000000' },
+  { id: 'kick_cp', label: 'Kick CodigoPoker',        handle: 'CodigoPlay',           color: '#53fc18' },
+  { id: 'fb_cp',   label: 'Facebook CodigoPoker',    handle: 'CodigoPoker',          color: '#1877f2' },
+  { id: 'yt_gg',   label: 'YouTube GGPoker ES',      handle: 'GGPoker en Español', color: '#ff6600' }
+];
 function App() {
   const [tab, setTab] = useState('cal');
   const [sel, setSel] = useState(SCHED[0].d);
@@ -1608,6 +1616,7 @@ function App() {
   const [regs, setRegs] = useState({});
   const [dayNotes, setDayNotes] = useState({}); // notas del día por fecha
   const [ytUrls, setYtUrls] = useState({}); // URL player YT por fecha
+  const [channels, setChannels] = useState({});
   const [online, setOnline] = useState(!!API_URL); // conectado a Apps Script
   const [syncing, setSyncing] = useState(false); // mostrando indicador de sync
   const [rundown, setRundown] = useState({}); // rundown por fecha mc4_rundown_DATE
@@ -1651,6 +1660,7 @@ function App() {
         setDayNotes(JSON.parse(v));
       } catch (e) {}
     });
+    sg('mc4_channels').then(v => { if (v) setChannels(JSON.parse(v)); });
     sg('mc4_ytUrls').then(v => {
       if (v) try {
         setYtUrls(JSON.parse(v));
@@ -1762,6 +1772,7 @@ function App() {
       regs: regs[date] || [],
       dayNote: dayNotes[date] || '',
       ytUrl: ytUrls[date] || '',
+      channels: channels[date] || [],
       promoSt: promoSt[date] || {},
       rundown: rundown[date] || {},
       feedOvr: feedOvr[date] || '',
@@ -1817,6 +1828,14 @@ function App() {
       });
     }
     // YT URL
+    if (snap.channels && Array.isArray(snap.channels)) {
+      setChannels(p => {
+        if (JSON.stringify(p[date]||[]) === JSON.stringify(snap.channels)) return p;
+        const u = {...p, [date]: snap.channels};
+        ss('mc4_channels', u);
+        return u;
+      });
+    }
     if (snap.ytUrl != null) setYtUrls(p => {
       if ((p[date] || '') === snap.ytUrl) return p;
       const u = {
@@ -2883,6 +2902,12 @@ function App() {
       window._noteTimer = setTimeout(() => {
         fbSet('dayNote', v);
       }, 300);
+      schedulePush(sel);
+    },
+    channels: channels[sel] || [],
+    onChannels: v => {
+      setChannels(p => { const u={...p,[sel]:v}; ss('mc4_channels',u); return u; });
+      fbSet('channels', v);
       schedulePush(sel);
     },
     ytUrl: ytUrls[sel] || '',
@@ -6003,6 +6028,8 @@ function EmView({
   onBrief,
   dayNote,
   onDayNote,
+  channels,
+  onChannels,
   ytUrl,
   onYtUrl,
   online,
@@ -7306,136 +7333,95 @@ function EmView({
       });
     }
   }, "+ Agregar alarma")), (() => {
-    function getYtId(url) {
-      if (!url) return null;
-      // ?v=ID or &v=ID
-      let m = url.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
-      if (m) return m[1];
-      // youtu.be/ID
-      m = url.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
-      if (m) return m[1];
-      // /embed/ID
-      m = url.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
-      if (m) return m[1];
-      // /live/ID
-      m = url.match(/\/live\/([a-zA-Z0-9_-]{11})/);
-      if (m) return m[1];
-      // bare 11-char ID
-      if (/^[a-zA-Z0-9_-]{11}$/.test(url.trim())) return url.trim();
-      return null;
+    const chDef = typeof CHANNELS_DEF !== 'undefined' ? CHANNELS_DEF : [];
+    const chList = channels || [];
+    function getCh(id) {
+      var found = chList.find(function(ch) { return ch.id === id; });
+      return found ? found : { id: id, live: false, url: '' };
     }
-    const ytId = getYtId(ytUrl);
-    const watchUrl = ytId ? `https://www.youtube.com/watch?v=${ytId}` : ytUrl || '';
-    return /*#__PURE__*/React.createElement("div", {
-      style: {
-        ...S.card
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: '11px',
-        color: '#ff4444',
-        textTransform: 'uppercase',
-        letterSpacing: '.08em',
-        fontWeight: 700,
-        marginBottom: '8px'
-      }
-    }, "\u25B6 Link YouTube del d\xEDa"), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        gap: '6px',
-        alignItems: 'center',
-        marginBottom: ytId ? '8px' : '0'
-      }
-    }, /*#__PURE__*/React.createElement("input", {
-      value: ytUrl || '',
-      onChange: e => onYtUrl(e.target.value),
-      placeholder: "Pegar link de YouTube...",
-      style: {
-        flex: 1,
-        fontSize: '12px',
-        padding: '6px 8px',
-        background: D.bg,
-        border: '1px solid ' + (ytId ? D.green : D.brd),
-        borderRadius: '5px',
-        color: D.txt,
-        fontFamily: D.sans
-      }
-    }), ytUrl && /*#__PURE__*/React.createElement("button", {
-      onClick: () => onYtUrl(''),
-      style: {
-        fontSize: '11px',
-        padding: '4px 8px',
-        background: 'none',
-        border: '1px solid ' + D.brd,
-        borderRadius: '5px',
-        color: D.txt3,
-        cursor: 'pointer'
-      }
-    }, "\u2715")), ytUrl && !ytId && /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: '11px',
-        color: D.red,
-        marginTop: '4px'
-      }
-    }, "\u26A0\uFE0F Link no reconocido"), ytId && /*#__PURE__*/React.createElement("div", {
-      style: {
-        position: 'relative',
-        borderRadius: '8px',
-        overflow: 'hidden',
-        cursor: 'pointer'
-      },
-      onClick: () => window.open(watchUrl, '_blank')
-    }, /*#__PURE__*/React.createElement("img", {
-      src: `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`,
-      onError: e => {
-        e.target.src = `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
-      },
-      alt: "thumbnail",
-      style: {
-        width: '100%',
-        display: 'block',
-        borderRadius: '8px'
-      }
-    }), /*#__PURE__*/React.createElement("div", {
-      style: {
-        position: 'absolute',
-        inset: 0,
-        background: 'rgba(0,0,0,.4)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: '8px'
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: '54px',
-        height: '54px',
-        background: '#ff0000',
-        borderRadius: '12px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        boxShadow: '0 2px 12px rgba(0,0,0,.5)'
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: '#fff',
-        fontSize: '24px',
-        marginLeft: '4px'
-      }
-    }, "\u25B6"))), /*#__PURE__*/React.createElement("div", {
-      style: {
-        position: 'absolute',
-        bottom: '8px',
-        right: '8px',
-        background: 'rgba(0,0,0,.75)',
-        borderRadius: '5px',
-        padding: '3px 9px',
-        fontSize: '11px',
-        color: '#fff',
-        fontWeight: 500
-      }
-    }, "Abrir en YouTube \u2197")));
+    function updCh(id, patch) {
+      var next = chDef.map(function(d) {
+        var e = getCh(d.id);
+        var base = { id: d.id, live: e.live || false, url: e.url || '' };
+        return base.id === id ? Object.assign(base, patch) : base;
+      });
+      onChannels(next);
+    }
+    var chRows = chDef.map(function(def) {
+      var ch = getCh(def.id);
+      var isLive = !!ch.live;
+      var canEdit = role === 'DIRECTOR';
+
+      var dotEl = /*#__PURE__*/React.createElement('div', {
+        style: {
+          width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0,
+          background: isLive ? '#e53' : D.brd,
+          boxShadow: isLive ? '0 0 0 3px rgba(238,85,51,.2)' : 'none'
+        }
+      });
+
+      var labelEl = ch.url
+        ? /*#__PURE__*/React.createElement('a', {
+            href: ch.url, target: '_blank', rel: 'noreferrer',
+            style: { flex: 1, fontSize: '12px', fontWeight: 500, color: isLive ? D.txt : D.txt2, textDecoration: 'none' }
+          },
+          def.label,
+          /*#__PURE__*/React.createElement('span', { style: { fontSize: '10px', color: D.txt3, marginLeft: '4px' } }, def.handle)
+        )
+        : /*#__PURE__*/React.createElement('span', {
+            style: { flex: 1, fontSize: '12px', fontWeight: 500, color: isLive ? D.txt : D.txt2 }
+          },
+          def.label,
+          /*#__PURE__*/React.createElement('span', { style: { fontSize: '10px', color: D.txt3, marginLeft: '4px' } }, def.handle)
+        );
+
+      var statusEl = canEdit
+        ? /*#__PURE__*/React.createElement('button', {
+            onClick: function() { updCh(def.id, { live: !isLive }); },
+            style: {
+              fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px',
+              cursor: 'pointer', border: 'none',
+              background: isLive ? '#e53' : D.sur, color: isLive ? '#fff' : D.txt3
+            }
+          }, isLive ? 'EN VIVO' : 'desc.')
+        : /*#__PURE__*/React.createElement('span', {
+            style: { fontSize: '10px', fontWeight: 600, color: isLive ? '#e53' : D.txt3 }
+          }, isLive ? 'EN VIVO' : 'desc.');
+
+      var linkEl = canEdit
+        ? /*#__PURE__*/React.createElement('button', {
+            onClick: function() {
+              var newUrl = window.prompt('Link para ' + def.label + ':', ch.url || '');
+              if (newUrl !== null) { updCh(def.id, { url: newUrl.trim() }); }
+            },
+            style: {
+              fontSize: '11px', padding: '2px 7px', background: 'none',
+              border: '1px solid ' + D.brd, borderRadius: '5px', color: D.txt3, cursor: 'pointer'
+            }
+          }, ch.url ? 'link' : '+link')
+        : null;
+
+      return /*#__PURE__*/React.createElement('div', {
+        key: def.id,
+        style: {
+          display: 'flex', alignItems: 'center', gap: '8px',
+          paddingBottom: '7px', marginBottom: '7px',
+          borderBottom: '0.5px solid ' + D.brd
+        }
+      }, dotEl, labelEl, statusEl, linkEl);
+    });
+
+    return /*#__PURE__*/React.createElement('div', {
+      style: { ...S.card }
+    },
+      /*#__PURE__*/React.createElement('div', {
+        style: {
+          fontSize: '11px', color: D.txt3, textTransform: 'uppercase',
+          letterSpacing: '.08em', fontWeight: 700, marginBottom: '10px'
+        }
+      }, 'Canales en vivo'),
+      chRows
+    );
   })())), sec === 'tasks' && /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
