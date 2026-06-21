@@ -2091,12 +2091,13 @@ function App() {
     };
     lastEdits.current.regs = Date.now();
     setRegs(p => {
-      const u = {
-        ...p,
-        [sel]: [...(p[sel] || []), e]
-      };
+      const newRegs = [...(p[sel] || []), e];
+      const u = { ...p, [sel]: newRegs };
       ss('mc4_regs', u);
-      schedulePush(sel);
+      if (FB_DB && sel && sel !== 'TEST') {
+        FB_DB.ref('days/' + sel + '/regs').set(newRegs).catch(() => {});
+      }
+      if (API_URL) setTimeout(() => pushDayOnline(sel, buildDaySnapshot(sel), role).catch(() => {}), 500);
       return u;
     });
     const detail = entry.person || entry.jugador || entry.desc || entry.titulo || entry.filename || entry.texto || '';
@@ -2107,13 +2108,13 @@ function App() {
     setRegs(p => {
       const a = [...(p[sel] || [])];
       const r = a.splice(idx, 1)[0];
-      const u = {
-        ...p,
-        [sel]: a
-      };
+      const u = { ...p, [sel]: a };
       ss('mc4_regs', u);
       addLog('🗑 Eliminado: [' + r.type + '] ' + r.time);
-      schedulePush(sel);
+      if (FB_DB && sel && sel !== 'TEST') {
+        FB_DB.ref('days/' + sel + '/regs').set(a).catch(() => {});
+      }
+      if (API_URL) setTimeout(() => pushDayOnline(sel, buildDaySnapshot(sel), role).catch(() => {}), 500);
       return u;
     });
   }
@@ -2135,20 +2136,17 @@ function App() {
     setTasks(p => {
       const dt = p[sel] || {};
       const on = !(dt[id] && dt[id].done);
-      const u = {
-        ...p,
-        [sel]: {
-          ...dt,
-          [id]: on ? {
-            done: true,
-            at: tstr()
-          } : {
-            done: false
-          }
-        }
+      const newDayTasks = {
+        ...dt,
+        [id]: on ? { done: true, at: tstr() } : { done: false }
       };
+      const u = { ...p, [sel]: newDayTasks };
       ss('mc4_tasks', u);
-      schedulePush(sel);
+      // Push directo con nuevo valor — evita closure stale
+      if (FB_DB && sel && sel !== 'TEST') {
+        FB_DB.ref('days/' + sel + '/tasks').set(newDayTasks).catch(() => {});
+      }
+      if (API_URL) setTimeout(() => pushDayOnline(sel, buildDaySnapshot(sel), role).catch(() => {}), 500);
       return u;
     });
     if (task && !(tasks[sel] && tasks[sel][id] && tasks[sel][id].done)) {
@@ -2161,7 +2159,11 @@ function App() {
     ss('mc4_phase_' + sel, p);
     addLog('Fase → ' + p.toUpperCase());
     beep(p === 'live' ? 'critical' : 'normal');
-    schedulePush(sel);
+    // Push directo con nuevo valor — evita closure stale
+    if (FB_DB && sel && sel !== 'TEST') {
+      FB_DB.ref('days/' + sel + '/phase').set(p).catch(() => {});
+    }
+    if (API_URL) setTimeout(() => pushDayOnline(sel, buildDaySnapshot(sel), role).catch(() => {}), 500);
   }
   function closeJornada() {
     if (!window.confirm('¿Cerrar la jornada del ' + sel + '?\nQuedará marcada como completada en el calendario.')) return;
@@ -2975,14 +2977,15 @@ function App() {
     online: online,
     onSave: v => {
       setRundown(p => {
-        const u = {
-          ...p,
-          [sel]: v
-        };
+        const u = { ...p, [sel]: v };
         ss('mc4_rundown', u);
         return u;
       });
-      schedulePush(sel);
+      // Push directo con el nuevo valor v — evita closure stale
+      if (FB_DB && sel && sel !== 'TEST') {
+        FB_DB.ref('days/' + sel + '/rundown').set(v).catch(() => {});
+      }
+      if (API_URL) setTimeout(() => pushDayOnline(sel, buildDaySnapshot(sel), role).catch(() => {}), 500);
     }
   }), tab === 'info' && /*#__PURE__*/React.createElement(TmplView, {
     copyText: copyText,
