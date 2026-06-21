@@ -6793,151 +6793,7 @@ function EmView({
       color: D.txt3,
       marginTop: '5px'
     }
-  }, online ? '✓ Se comparte con todos los usuarios en tiempo real' : '⚠ Sin conexión — se guarda solo en este dispositivo')), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '11px',
-      color: D.txt3,
-      textTransform: 'uppercase',
-      letterSpacing: '.08em',
-      marginBottom: '8px'
-    }
-  }, "Timeline hoy \xB7 feed ", effFeed, " BsAs"), alarmStrip.length === 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: D.txt3,
-      fontSize: '12px',
-      padding: '12px 0'
-    }
-  }, "Feed no configurado."), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: '8px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: '10px',
-      color: D.txt3,
-      textTransform: 'uppercase',
-      letterSpacing: '.08em',
-      marginBottom: '6px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '6px'
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      background: D.red + '22',
-      color: D.red,
-      padding: '1px 6px',
-      borderRadius: '3px',
-      fontSize: '9px',
-      fontWeight: 700
-    }
-  }, "DIARIAS"), "Alarmas fijas de producci\xF3n \xB7 feed ", effFeed, " BsAs"), alarmStrip.length === 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: D.txt3,
-      fontSize: '12px'
-    }
-  }, "Configur\xE1 el feed para ver el timeline."), alarmStrip.filter(a => !a.firedAt).length === 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      color: D.green,
-      fontSize: '12px',
-      padding: '6px 0'
-    }
-  }, "\u2713 Todas dispararon \u2014 ver historial abajo."), alarmStrip.filter(a => !a.firedAt).map((a, i) => {
-    const isPast = a.past;
-    const isGG = a.gg;
-    const pendingList = alarmStrip.filter(x => !x.firedAt);
-    const nextIdx = pendingList.findIndex(x => !x.past);
-    const isNext = i === nextIdx;
-    const uc = a.u === 'critical' ? D.red : a.u === 'high' ? D.amber : isGG ? D.blue : D.txt3;
-    const bg = isNext ? a.u === 'critical' ? D.redBg : a.u === 'high' ? D.amberBg : D.blueBg : 'transparent';
-    const bd = isNext ? a.u === 'critical' ? D.red : a.u === 'high' ? D.amber : D.blue : D.brd + '55';
-    return /*#__PURE__*/React.createElement("div", {
-      key: a.id,
-      className: isNext && a.df < 5 ? 'ring' : '',
-      style: {
-        display: 'flex',
-        gap: '8px',
-        alignItems: 'center',
-        padding: '8px 10px',
-        background: bg,
-        border: `1px solid ${bd}`,
-        borderLeft: `3px solid ${isNext ? uc : isPast ? D.brd + '44' : uc + '44'}`,
-        borderRadius: '7px',
-        marginBottom: '4px',
-        opacity: isPast ? .3 : 1
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        width: '28px',
-        height: '28px',
-        borderRadius: '50%',
-        flexShrink: 0,
-        border: `1.5px solid ${isNext ? uc : D.brd + '44'}`,
-        background: isNext ? uc + '22' : 'transparent',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: '12px'
-      }
-    }, isGG ? '📡' : '○'), /*#__PURE__*/React.createElement("div", {
-      style: {
-        flex: 1,
-        minWidth: 0
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '5px',
-        marginBottom: '1px',
-        flexWrap: 'wrap'
-      }
-    }, isGG && /*#__PURE__*/React.createElement("span", {
-      style: {
-        background: D.blueBg,
-        color: D.blue,
-        fontSize: '9px',
-        fontWeight: 700,
-        padding: '1px 5px',
-        borderRadius: '3px'
-      }
-    }, "GG"), /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: isNext ? uc : isPast ? D.txt3 : D.txt2,
-        fontSize: '12px',
-        fontWeight: isNext ? 700 : 400
-      }
-    }, a.msg)), a.note && /*#__PURE__*/React.createElement("div", {
-      style: {
-        color: D.txt3,
-        fontSize: '10px',
-        fontStyle: 'italic'
-      }
-    }, a.note), isNext && /*#__PURE__*/React.createElement("div", {
-      style: {
-        color: uc,
-        fontSize: '11px',
-        fontWeight: 600
-      }
-    }, "en ", a.df < 60 ? a.df + ' min' : Math.floor(a.df / 60) + 'h ' + String(a.df % 60).padStart(2, '0') + 'm')), /*#__PURE__*/React.createElement("div", {
-      style: {
-        textAlign: 'right',
-        flexShrink: 0
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: '13px',
-        fontFamily: D.mono,
-        fontWeight: isNext ? 700 : 400,
-        color: isNext ? uc : isPast ? D.txt3 + '66' : D.txt3
-      }
-    }, a.clockTime), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: '9px',
-        color: D.txt3
-      }
-    }, "BsAs")));
-  })), custA.filter(a => !a.fired).length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, online ? '✓ Se comparte con todos los usuarios en tiempo real' : '⚠ Sin conexión — se guarda solo en este dispositivo')), /*#__PURE__*/React.createElement("div", { style: { height: '8px' } }), custA.filter(a => !a.fired).length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       borderTop: '1px solid ' + D.brd,
       paddingTop: '8px',
@@ -7026,6 +6882,151 @@ function EmView({
       },
       onClick: () => removeCustAlarm(a.id)
     }, role === 'VISITOR' ? null : "\u2715"));
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '11px',
+      color: D.txt3,
+      textTransform: 'uppercase',
+      letterSpacing: '.08em',
+      marginBottom: '8px'
+    }
+  }, "Timeline hoy \xB7 feed ", effFeed, " BsAs"), alarmStrip.length === 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: D.txt3,
+      fontSize: '12px',
+      padding: '12px 0'
+    }
+  }, "Feed no configurado."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: '8px'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '10px',
+      color: D.txt3,
+      textTransform: 'uppercase',
+      letterSpacing: '.08em',
+      marginBottom: '6px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      background: D.red + '22',
+      color: D.red,
+      padding: '1px 6px',
+      borderRadius: '3px',
+      fontSize: '9px',
+      fontWeight: 700
+    }
+  }, "DIARIAS"), "Alarmas fijas de producci\xF3n \xB7 feed ", effFeed, " BsAs"), alarmStrip.length === 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: D.txt3,
+      fontSize: '12px'
+    }
+  }, "Configur\xE1 el feed para ver el timeline."), alarmStrip.filter(a => !a.firedAt).length === 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: D.green,
+      fontSize: '12px',
+      padding: '6px 0'
+    }
+  }, "\u2713 Todas dispararon \u2014 ver historial abajo."), [...alarmStrip.filter(a => !a.firedAt), ...alarmStrip.filter(a => !!a.firedAt)].map((a, i) => {
+    const isPast = a.past;
+    const isGG = a.gg;
+    const isFiredDone = !!a.firedAt;
+    const pendingList = alarmStrip.filter(x => !x.firedAt);
+    const nextIdx = pendingList.findIndex(x => !x.past);
+    const isNext = !isFiredDone && i === nextIdx;
+    const uc = a.u === 'critical' ? D.red : a.u === 'high' ? D.amber : isGG ? D.blue : D.txt3;
+    const bg = isNext ? a.u === 'critical' ? D.redBg : a.u === 'high' ? D.amberBg : D.blueBg : 'transparent';
+    const bd = isNext ? a.u === 'critical' ? D.red : a.u === 'high' ? D.amber : D.blue : D.brd + '55';
+    return /*#__PURE__*/React.createElement("div", {
+      key: a.id,
+      className: isNext && a.df < 5 ? 'ring' : '',
+      style: {
+        display: 'flex',
+        gap: '8px',
+        alignItems: 'center',
+        padding: '8px 10px',
+        background: bg,
+        border: `1px solid ${bd}`,
+        borderLeft: `3px solid ${isNext ? uc : isPast ? D.brd + '44' : uc + '44'}`,
+        borderRadius: '7px',
+        marginBottom: '4px',
+        opacity: isFiredDone ? .4 : isPast ? .3 : 1
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: '28px',
+        height: '28px',
+        borderRadius: '50%',
+        flexShrink: 0,
+        border: `1.5px solid ${isNext ? uc : D.brd + '44'}`,
+        background: isNext ? uc + '22' : 'transparent',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '12px'
+      }
+    }, isFiredDone ? /*#__PURE__*/React.createElement('span', {style:{color:D.green,fontSize:'14px'}}, '✓') : isGG ? '📡' : '○'), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1,
+        minWidth: 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '5px',
+        marginBottom: '1px',
+        flexWrap: 'wrap'
+      }
+    }, isGG && /*#__PURE__*/React.createElement("span", {
+      style: {
+        background: D.blueBg,
+        color: D.blue,
+        fontSize: '9px',
+        fontWeight: 700,
+        padding: '1px 5px',
+        borderRadius: '3px'
+      }
+    }, "GG"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: isFiredDone ? D.green + '99' : isNext ? uc : isPast ? D.txt3 : D.txt2,
+        fontSize: '12px',
+        fontWeight: isNext ? 700 : 400
+      }
+    }, a.msg)), a.note && /*#__PURE__*/React.createElement("div", {
+      style: {
+        color: D.txt3,
+        fontSize: '10px',
+        fontStyle: 'italic'
+      }
+    }, a.note), isNext && /*#__PURE__*/React.createElement("div", {
+      style: {
+        color: uc,
+        fontSize: '11px',
+        fontWeight: 600
+      }
+    }, "en ", a.df < 60 ? a.df + ' min' : Math.floor(a.df / 60) + 'h ' + String(a.df % 60).padStart(2, '0') + 'm')), /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: 'right',
+        flexShrink: 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: '13px',
+        fontFamily: D.mono,
+        fontWeight: isNext ? 700 : 400,
+        color: isFiredDone ? D.green + '77' : isNext ? uc : isPast ? D.txt3 + '66' : D.txt3
+      }
+    }, a.clockTime), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: '9px',
+        color: D.txt3
+      }
+    }, "BsAs")));
   })), (() => {
     const autoFired = alarmStrip.filter(a => !!a.firedAt).map(a => ({
       k: 'af_' + a.id,
