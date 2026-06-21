@@ -376,16 +376,18 @@ const SCHED = [{
 }, {
   d: '2026-06-21',
   wd: 'Domingo',
-  ev: '#55 PLO HR Mesa Final / WSOP Online Hybrid Mesa Final',
+  ev: '#55 · $50K PLO HR Mesa Final / WSOP Online Hybrid Mesa Final',
   st: 'Ambos Mesa Final',
   c: 'rojo',
   ba: '22:00',
   lv: '18:00',
   double: true,
-  t1h: '',
-  t1a: 'Emanuel Marso',
-  t2h: '',
-  t2a: 'Emanuel Marso',
+  t1h: 'Fernando Romano',
+  t1a: 'Matías Chervin (@chervinmati)',
+  t2h: 'Fernando Romano',
+  t2a: 'Matías Chervin (@chervinmati)',
+  invitado: 'Emanuel Marso (desde las 00:00)',
+  redes: '#UNICO',
   champ: 'Dylan Linde',
   champPrize: '$2,146,414',
   pdfPage: 63
@@ -1774,6 +1776,7 @@ function App() {
       ytUrl: ytUrls[date] || '',
       channels: channels[date] || [],
       promoSt: promoSt[date] || {},
+      promoCfg: promoCfg || [],
       rundown: rundown[date] || {},
       feedOvr: feedOvr[date] || '',
       portal: portals[date] || '',
@@ -1846,6 +1849,14 @@ function App() {
       return u;
     });
     // Promos
+    // Orden/config de promos — se aplica cuando viene del DIRECTOR
+    if (snap.promoCfg && Array.isArray(snap.promoCfg) && snap.promoCfg.length > 0) {
+      setPromoCfg(prev => {
+        if (JSON.stringify(prev) === JSON.stringify(snap.promoCfg)) return prev;
+        ss('mc4_promo_cfg', snap.promoCfg);
+        return snap.promoCfg;
+      });
+    }
     if (snap.promoSt) setPromoSt(p => {
       const u = {
         ...p,
@@ -1887,12 +1898,12 @@ function App() {
       setCustA(prev => {
         const merged = snap.custA.map(incoming => {
           const local = prev.find(p => p.id === incoming.id);
-          // Si ya existe localmente, preservar su estado fired
+          // Preservar estado fired local (si ya sonó en este dispositivo)
           if (local) return { ...incoming, fired: local.fired || incoming.fired, firedAt: local.firedAt || incoming.firedAt };
           return incoming;
         });
-        // También conservar alarmas locales que no vengan en el snapshot
-        prev.forEach(p => { if (!merged.find(m => m.id === p.id)) merged.push(p); });
+        // NO agregamos alarmas locales que no estén en el snapshot:
+        // si el DIRECTOR borró una, no debe volver a aparecer en nadie
         if (JSON.stringify(merged) === JSON.stringify(prev)) return prev;
         ss('mc4_ca_' + date, merged);
         return merged;
@@ -2979,6 +2990,9 @@ function App() {
     onCfg: v => {
       setPromoCfg(v);
       ss('mc4_promo_cfg', v);
+      // Sincronizar orden/config de promos a Firebase para todos
+      fbSet('promoCfg', v);
+      schedulePush(sel);
     }
   }), tab === 'rundown' && /*#__PURE__*/React.createElement(RundownView, {
     sel: sel,
@@ -5429,6 +5443,7 @@ function PromoQueue({
       const s = promoSt || def();
       if (!s.started || s.cur >= queue.length) return;
       if (s.phase === 'idle') return;
+      if (s.paused) return; // pausado — no avanzar
       if (s.phase === 'waiting' && s.nextDue && n >= s.nextDue) {
         const u = {
           ...s,
@@ -5458,7 +5473,7 @@ function PromoQueue({
     return () => clearInterval(id);
   }, [st.started, st.phase, st.cur, queue.length]);
   function doStart() {
-    getCtx(); // unlock audio on user gesture
+    getCtx();
     save({
       started: true,
       phase: 'waiting',
@@ -5466,8 +5481,20 @@ function PromoQueue({
       cur: 0,
       lastAlert: null,
       alertCount: 0,
-      history: []
+      history: [],
+      paused: false,
+      pausedAt: null
     });
+  }
+  function doPause() {
+    if (!st.started || st.phase === 'done' || st.paused) return;
+    save({ ...st, paused: true, pausedAt: Date.now() });
+  }
+  function doResume() {
+    if (!st.paused || !st.pausedAt) return;
+    const elapsed = Date.now() - st.pausedAt;
+    const newNextDue = st.nextDue ? st.nextDue + elapsed : Date.now() + PROMO_MIN * 60 * 1000;
+    save({ ...st, paused: false, pausedAt: null, nextDue: newNextDue });
   }
   function doOK() {
     if (st.cur >= queue.length) return;
@@ -5683,7 +5710,20 @@ function PromoQueue({
       color: D.txt3,
       cursor: 'pointer'
     }
-  }, "Reiniciar")), !st.started && /*#__PURE__*/React.createElement("button", {
+  }, "Reiniciar"), /*#__PURE__*/React.createElement("button", {
+    onClick: function() { if (st.paused) doResume(); else doPause(); },
+    style: {
+      marginLeft: '4px',
+      fontSize: '10px',
+      padding: '2px 8px',
+      borderRadius: '4px',
+      background: st.paused ? D.green + '22' : D.amber + '22',
+      border: '1px solid ' + (st.paused ? D.green + '55' : D.amber + '55'),
+      color: st.paused ? D.green : D.amber,
+      cursor: 'pointer',
+      fontWeight: 600
+    }
+  }, st.paused ? "▶ Reanudar" : "⏸ Pausar")), !st.started && /*#__PURE__*/React.createElement("button", {
     onClick: doStart,
     style: {
       width: '100%',
