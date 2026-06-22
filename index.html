@@ -2325,10 +2325,33 @@ function App() {
     setCustA([]);
     ss('mc4_ca_' + sel, []);
   }
-  function doExcel() {
+  async function doExcel() {
     const dt = tasks[sel] || {},
       dr = regs[sel] || [],
       dl = logs[sel] || [];
+    // Traer estadísticas de audiencia del GAS (picos y medias)
+    let viewerStats = null;
+    try {
+      if (API_URL) {
+        const r = await fetch(API_URL + '?stats=' + encodeURIComponent(sel), { redirect: 'follow' });
+        const j = await r.json();
+        if (j && j.ok && j.stats) viewerStats = j.stats;
+      }
+    } catch (e) { viewerStats = null; }
+    const CH_NAMES = {
+      yt_cp: 'YouTube CodigoPoker',
+      yt_gg: 'YouTube GGPoker ES',
+      yt_br: 'YouTube CodigoPoker Brasil',
+      tw_cp: 'Twitch CodigoPlay',
+      tw_cp2: 'Twitch CodigoPoker'
+    };
+    const audienciaRows = viewerStats
+      ? [['AUDIENCIA — ' + sel], [''], ['CANAL', 'PICO MÁXIMO', 'MEDIA', 'MUESTRAS'],
+          ...Object.keys(CH_NAMES).map(function(k) {
+            const s = viewerStats[k] || { peak: 0, avg: 0, count: 0 };
+            return [CH_NAMES[k], s.peak || 0, s.avg || 0, s.count || 0];
+          })]
+      : [['AUDIENCIA — ' + sel], [''], ['Sin datos de audiencia para este día.'], ['(El registro automático corre durante la emisión cada minuto.)']];
     const events = [];
     dl.forEach(l => events.push([l.time, 'LOG', l.msg, l.owner]));
     dr.forEach(r => {
@@ -2369,6 +2392,9 @@ function App() {
     }, {
       name: 'Log',
       rows: [['HORA', 'MENSAJE', 'RESPONSABLE'], ...dl.map(l => [l.time, l.msg, l.owner])]
+    }, {
+      name: 'Audiencia',
+      rows: audienciaRows
     }], 'emision_' + sel + '.xlsx');
     if (ok) addLog('Excel exportado', 'BRUNO');else showToast('Descarga bloqueada — intentá desde Chrome', 'high', false);
   }
