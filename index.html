@@ -1980,6 +1980,18 @@ function App() {
     return unsubscribe;
   }, [sel]);
 
+  // Listener de viewers — se actualiza cada 60s desde el GAS
+  const [viewers, setViewers] = React.useState({});
+  useEffect(() => {
+    if (!FB_DB) return;
+    const ref = FB_DB.ref('viewers');
+    ref.on('value', snap => {
+      const val = snap.val();
+      if (val) setViewers(val);
+    });
+    return () => ref.off('value');
+  }, []);
+
   // Fallback polling cada 10s SOLO si Firebase no está disponible
   // (con Firebase no hace falta porque el listener empuja todo al instante)
   useEffect(() => {
@@ -2917,6 +2929,7 @@ function App() {
       schedulePush(sel);
     },
     channels: channels[sel] || [],
+    viewers: viewers,
     onChannels: v => {
       setChannels(p => { const u={...p,[sel]:v}; ss('mc4_channels',u); return u; });
       fbSet('channels', v);
@@ -6074,6 +6087,7 @@ function EmView({
   dayNote,
   onDayNote,
   channels,
+  viewers,
   onChannels,
   ytUrl,
   onYtUrl,
@@ -7428,6 +7442,7 @@ function EmView({
     }
 
     // Render de una fila de canal
+    var vw = viewers || {};
     function renderRow(def, isCustom) {
       var ch = isCustom ? def : getCh(def.id);
       var id = def.id;
@@ -7435,6 +7450,16 @@ function EmView({
       var handle = def.handle || ch.handle || '';
       var isLive = !!ch.live;
       var canEdit = role === 'DIRECTOR';
+      var viewerCount = vw[id];
+      var viewerEl = (isLive && viewerCount != null && viewerCount > 0)
+        ? /*#__PURE__*/React.createElement('span', {
+            style: {
+              fontSize: '11px', fontWeight: 600, color: '#e53',
+              background: '#e5330015', borderRadius: '4px',
+              padding: '1px 6px', whiteSpace: 'nowrap'
+            }
+          }, viewerCount.toLocaleString() + ' 👁')
+        : null;
 
       var dotEl = /*#__PURE__*/React.createElement('div', {
         style: {
@@ -7491,7 +7516,7 @@ function EmView({
           paddingBottom: '7px', marginBottom: '7px',
           borderBottom: '0.5px solid ' + D.brd
         }
-      }, dotEl, labelEl, statusEl, linkEl, removeEl);
+      }, dotEl, labelEl, viewerEl, statusEl, linkEl, removeEl);
     }
 
     var baseRows = chDef.map(function(def) { return renderRow(def, false); });
