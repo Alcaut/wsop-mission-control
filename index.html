@@ -386,7 +386,7 @@ const SCHED = [{
   t1a: 'Matías Chervin (@chervinmati)',
   t2h: 'Fernando Romano',
   t2a: 'Matías Chervin (@chervinmati)',
-  invitado: 'Emanuel Marso (desde las 00:00)',
+  invitado: 'Emanuel Marso (desde las 00:00) · Alan Ferreira',
   redes: '#UNICO',
   champ: 'Dylan Linde',
   champPrize: '$2,146,414',
@@ -1607,7 +1607,8 @@ const CHANNELS_DEF = [
   { id: 'x_cp',    label: 'X / Twitter CodigoPoker', handle: '@CodigoPoker',         color: '#000000' },
   { id: 'kick_cp', label: 'Kick CodigoPoker',        handle: 'CodigoPlay',           color: '#53fc18' },
   { id: 'fb_cp',   label: 'Facebook CodigoPoker',    handle: 'CodigoPoker',          color: '#1877f2' },
-  { id: 'yt_gg',   label: 'YouTube GGPoker ES',      handle: 'GGPoker en Español', color: '#ff6600' }
+  { id: 'yt_gg',   label: 'YouTube GGPoker ES',      handle: 'GGPoker en Español', color: '#ff6600' },
+  { id: 'yt_br',   label: 'CodigoPoker Brasil',       handle: '@CodigoPokerBrasil',   color: '#009c3b' }
 ];
 function App() {
   const [tab, setTab] = useState('cal');
@@ -7379,20 +7380,59 @@ function EmView({
   }, "+ Agregar alarma")), (() => {
     const chDef = typeof CHANNELS_DEF !== 'undefined' ? CHANNELS_DEF : [];
     const chList = channels || [];
+    const baseIds = new Set(chDef.map(function(d) { return d.id; }));
+    const customChs = chList.filter(function(ch) { return !baseIds.has(ch.id) && ch.label; });
+
+    // Obtener estado de un canal base (por id)
     function getCh(id) {
-      var found = chList.find(function(ch) { return ch.id === id; });
-      return found ? found : { id: id, live: false, url: '' };
+      var found = chList.find(function(c) { return c.id === id; });
+      return found || { id: id, live: false, url: '' };
     }
+    // Actualizar estado de cualquier canal (base o custom)
     function updCh(id, patch) {
-      var next = chDef.map(function(d) {
+      var baseEntries = chDef.map(function(d) {
         var e = getCh(d.id);
-        var base = { id: d.id, live: e.live || false, url: e.url || '' };
-        return base.id === id ? Object.assign(base, patch) : base;
+        return { id: d.id, live: e.live || false, url: e.url || '' };
+      });
+      var allEntries = baseEntries.concat(customChs);
+      var next = allEntries.map(function(c) {
+        return c.id === id ? Object.assign({}, c, patch) : c;
       });
       onChannels(next);
     }
-    var chRows = chDef.map(function(def) {
-      var ch = getCh(def.id);
+    // Agregar canal custom
+    function addCustomCh() {
+      var label = window.prompt('Nombre del canal (ej: CodigoPoker Brasil):');
+      if (!label || !label.trim()) return;
+      var handle = window.prompt('Handle (ej: @CodigoPokerBrasil):', '');
+      var id = 'custom_' + Date.now();
+      var baseEntries = chDef.map(function(d) {
+        var e = getCh(d.id);
+        return { id: d.id, live: e.live || false, url: e.url || '' };
+      });
+      var next = baseEntries.concat(customChs).concat([{
+        id: id, label: label.trim(),
+        handle: (handle || '').trim(),
+        live: false, url: '', custom: true
+      }]);
+      onChannels(next);
+    }
+    // Eliminar canal custom
+    function removeCh(id) {
+      var baseEntries = chDef.map(function(d) {
+        var e = getCh(d.id);
+        return { id: d.id, live: e.live || false, url: e.url || '' };
+      });
+      var next = baseEntries.concat(customChs.filter(function(c) { return c.id !== id; }));
+      onChannels(next);
+    }
+
+    // Render de una fila de canal
+    function renderRow(def, isCustom) {
+      var ch = isCustom ? def : getCh(def.id);
+      var id = def.id;
+      var label = def.label || ch.label || id;
+      var handle = def.handle || ch.handle || '';
       var isLive = !!ch.live;
       var canEdit = role === 'DIRECTOR';
 
@@ -7403,25 +7443,17 @@ function EmView({
           boxShadow: isLive ? '0 0 0 3px rgba(238,85,51,.2)' : 'none'
         }
       });
-
       var labelEl = ch.url
         ? /*#__PURE__*/React.createElement('a', {
             href: ch.url, target: '_blank', rel: 'noreferrer',
             style: { flex: 1, fontSize: '12px', fontWeight: 500, color: isLive ? D.txt : D.txt2, textDecoration: 'none' }
-          },
-          def.label,
-          /*#__PURE__*/React.createElement('span', { style: { fontSize: '10px', color: D.txt3, marginLeft: '4px' } }, def.handle)
-        )
+          }, label, ' ', /*#__PURE__*/React.createElement('span', { style: { fontSize: '10px', color: D.txt3, marginLeft: '4px' } }, handle))
         : /*#__PURE__*/React.createElement('span', {
             style: { flex: 1, fontSize: '12px', fontWeight: 500, color: isLive ? D.txt : D.txt2 }
-          },
-          def.label,
-          /*#__PURE__*/React.createElement('span', { style: { fontSize: '10px', color: D.txt3, marginLeft: '4px' } }, def.handle)
-        );
-
+          }, label, ' ', /*#__PURE__*/React.createElement('span', { style: { fontSize: '10px', color: D.txt3, marginLeft: '4px' } }, handle));
       var statusEl = canEdit
         ? /*#__PURE__*/React.createElement('button', {
-            onClick: function() { updCh(def.id, { live: !isLive }); },
+            onClick: function() { updCh(id, { live: !isLive }); },
             style: {
               fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px',
               cursor: 'pointer', border: 'none',
@@ -7431,12 +7463,11 @@ function EmView({
         : /*#__PURE__*/React.createElement('span', {
             style: { fontSize: '10px', fontWeight: 600, color: isLive ? '#e53' : D.txt3 }
           }, isLive ? 'EN VIVO' : 'desc.');
-
       var linkEl = canEdit
         ? /*#__PURE__*/React.createElement('button', {
             onClick: function() {
-              var newUrl = window.prompt('Link para ' + def.label + ':', ch.url || '');
-              if (newUrl !== null) { updCh(def.id, { url: newUrl.trim() }); }
+              var newUrl = window.prompt('Link para ' + label + ':', ch.url || '');
+              if (newUrl !== null) { updCh(id, { url: newUrl.trim() }); }
             },
             style: {
               fontSize: '11px', padding: '2px 7px', background: 'none',
@@ -7444,16 +7475,37 @@ function EmView({
             }
           }, ch.url ? 'link' : '+link')
         : null;
-
+      var removeEl = (canEdit && isCustom)
+        ? /*#__PURE__*/React.createElement('button', {
+            onClick: function() { if (window.confirm('Eliminar ' + label + '?')) removeCh(id); },
+            style: {
+              fontSize: '11px', padding: '2px 5px', background: 'none',
+              border: '1px solid #e5330044', borderRadius: '5px', color: '#e53', cursor: 'pointer'
+            }
+          }, '×')
+        : null;
       return /*#__PURE__*/React.createElement('div', {
-        key: def.id,
+        key: id,
         style: {
-          display: 'flex', alignItems: 'center', gap: '8px',
+          display: 'flex', alignItems: 'center', gap: '6px',
           paddingBottom: '7px', marginBottom: '7px',
           borderBottom: '0.5px solid ' + D.brd
         }
-      }, dotEl, labelEl, statusEl, linkEl);
-    });
+      }, dotEl, labelEl, statusEl, linkEl, removeEl);
+    }
+
+    var baseRows = chDef.map(function(def) { return renderRow(def, false); });
+    var customRows = customChs.map(function(ch) { return renderRow(ch, true); });
+    var addBtn = role === 'DIRECTOR'
+      ? /*#__PURE__*/React.createElement('button', {
+          onClick: addCustomCh,
+          style: {
+            width: '100%', marginTop: '6px', fontSize: '11px', padding: '4px',
+            background: 'none', border: '1px dashed ' + D.brd, borderRadius: '5px',
+            color: D.txt3, cursor: 'pointer'
+          }
+        }, '+ Agregar canal')
+      : null;
 
     return /*#__PURE__*/React.createElement('div', {
       style: { ...S.card }
@@ -7464,7 +7516,7 @@ function EmView({
           letterSpacing: '.08em', fontWeight: 700, marginBottom: '10px'
         }
       }, 'Canales en vivo'),
-      chRows
+      baseRows, customRows, addBtn
     );
   })())), sec === 'tasks' && /*#__PURE__*/React.createElement("div", {
     style: {
